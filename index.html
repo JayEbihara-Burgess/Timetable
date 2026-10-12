@@ -98,6 +98,7 @@ html,body{overscroll-behavior-x:none}
 .panel{flex:0 0 33.3333%;min-width:0}
 .panel.side{max-height:var(--h);overflow:hidden}
 .gridwrap.day{overflow-x:hidden}
+.gridwrap{overscroll-behavior-x:none}
 @media (max-width:700px){
   .modal{align-items:flex-end;padding:0}
   .sheet{max-width:none;border-radius:16px 16px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom))}
@@ -581,6 +582,7 @@ function renderStats() {
     : "";
 }
 
+let scrollMode = "keep";      // where the current week's sideways scroll should sit after a render: keep | start | end
 function render() {
   const end = weekStart + 6 * DAY;
   document.getElementById("range").textContent = view === "day"
@@ -590,12 +592,13 @@ function render() {
   document.getElementById("vweek").classList.toggle("on", view === "week");
   document.getElementById("vlist").classList.toggle("on", view === "list");
   document.querySelectorAll("#zoneSeg button").forEach(b => b.classList.toggle("on", b.dataset.z === zonePref));
-  const auto = zonePref === "auto";
-  document.getElementById("zoneNote").textContent =
-    `Showing ${zoneName(view === "day" ? dayStart : weekStart)}` + (auto ? ` — chosen automatically from your device's time zone${detected.tz ? " (" + detected.tz + ")" : ""}. Use the buttons to switch.` : ".");
+  document.getElementById("zoneNote").textContent = `Showing ${zoneName(view === "day" ? dayStart : weekStart)}`;
   renderNext(); renderStats();
   // three panels side by side (previous | current | next) so the neighbour is visible while swiping
   const v = document.getElementById("view");
+  const key = view + ":" + (view === "day" ? dayStart : weekStart);
+  const oldWrap = v.firstElementChild && v.firstElementChild.children[1] && v.firstElementChild.children[1].querySelector(".gridwrap");
+  const keepLeft = (v.dataset.key === key && oldWrap) ? oldWrap.scrollLeft : 0;   // keep sideways scroll on a plain re-render
   v.className = view === "week" ? "wk" : "";
   v.innerHTML = "";
   const unit = view === "day" ? DAY : 7 * DAY, anchor = view === "day" ? dayStart : weekStart;
@@ -609,6 +612,16 @@ function render() {
   });
   v.appendChild(track);
   track.style.setProperty("--h", track.children[1].offsetHeight + "px");
+  if (view === "week") {
+    // the previous week waits at its right-hand end and the next at its left, so each joins up seamlessly with the current one
+    const wrapOf = i => track.children[i].querySelector(".gridwrap");
+    const c = wrapOf(1), p = wrapOf(0), n = wrapOf(2);
+    if (p) p.scrollLeft = p.scrollWidth;
+    if (n) n.scrollLeft = 0;
+    if (c) c.scrollLeft = scrollMode === "end" ? c.scrollWidth : scrollMode === "start" ? 0 : keepLeft;
+  }
+  scrollMode = "keep";
+  v.dataset.key = key;
 }
 
 // ---------------------------------------------------------------- wiring
@@ -680,6 +693,7 @@ function snapBack(dx) {
   if (tr.animate && dx) tr.animate([{ transform: pos(dx) }, { transform: pos(0) }], { duration: 200, easing: "ease-out" });
 }
 function go(dir) {
+  scrollMode = dir < 0 ? "end" : "start";
   if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
   else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
   render();
@@ -704,32 +718,38 @@ const centerWrap = () => { const tr = trackEl(); return tr && tr.children[1].que
 viewEl.addEventListener("touchstart", e => {
   if (sliding || e.touches.length !== 1) { touch = null; return; }
   const t = e.touches[0];
-  touch = { x: t.clientX, y: t.clientY, dx: 0, lock: null, t0: Date.now(), canPrev: true, canNext: true, sl0: 0 };
+  // baseL / baseR: the finger position at which the grid reached its left / right end (null = not at that end)
+  touch = { x: t.clientX, y: t.clientY, dx: 0, lock: null, t0: Date.now(), baseL: 0, baseR: 0 };
   if (view === "week") {
     const gw = centerWrap();
     if (gw) {
       const max = gw.scrollWidth - gw.clientWidth;
-      touch.sl0 = gw.scrollLeft;
-      touch.canPrev = gw.scrollLeft <= 1;            // at the left end: dragging right goes to the previous week
-      touch.canNext = gw.scrollLeft >= max - 1;      // at the right end: dragging left goes to the next week
+      if (gw.scrollLeft > 1) touch.baseL = null;
+      if (gw.scrollLeft < max - 1) touch.baseR = null;
     }
   }
 }, { passive: true });
 viewEl.addEventListener("touchmove", e => {
   if (!touch) return;
   const t = e.touches[0];
-  let dx = t.clientX - touch.x; const dy = t.clientY - touch.y;
+  const dx = t.clientX - touch.x, dy = t.clientY - touch.y;
   if (!touch.lock && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) touch.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
   if (touch.lock !== "x") return;
+  let pull = dx;
   if (view === "week") {
+    // the grid scrolls natively; only the drag beyond its very end pulls in the neighbouring week
     const gw = centerWrap();
-    if (gw && Math.abs(gw.scrollLeft - touch.sl0) > 1) {      // the grid itself is scrolling: hand the gesture back to it
-      touch.lock = "n"; touch.dx = 0; snapBack(0); return;
+    if (gw) {
+      const max = gw.scrollWidth - gw.clientWidth;
+      if (gw.scrollLeft <= 1) { if (touch.baseL === null) touch.baseL = dx; } else touch.baseL = null;
+      if (gw.scrollLeft >= max - 1) { if (touch.baseR === null) touch.baseR = dx; } else touch.baseR = null;
     }
+    pull = 0;
+    if (touch.baseL !== null && dx - touch.baseL > 0) pull = dx - touch.baseL;
+    else if (touch.baseR !== null && dx - touch.baseR < 0) pull = dx - touch.baseR;
   }
-  if ((dx > 0 && !touch.canPrev) || (dx < 0 && !touch.canNext)) dx = 0;
-  touch.dx = dx;
-  const tr = trackEl(); if (tr) tr.style.transform = pos(dx);
+  touch.dx = pull;
+  const tr = trackEl(); if (tr) tr.style.transform = pos(pull);
 }, { passive: true });
 function endSwipe() {
   const s = touch; touch = null;
