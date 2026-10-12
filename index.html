@@ -653,13 +653,12 @@ function slide(dir, change) {
       { duration: 190, easing: "ease-out" }).finished;
   }).catch(() => {}).finally(() => { sliding = false; });
 }
-function step(dir) {
-  slide(dir, () => {
-    if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
-    else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
-    render();
-  });
+function go(dir) {
+  if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
+  else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
+  render();
 }
+function step(dir) { slide(dir, () => go(dir)); }
 function setView(v) {
   if (v === "day" && view !== "day") { const t = todayUk(); dayStart = (t >= weekStart && t < weekStart + 7 * DAY) ? t : weekStart; }
   view = v; store.set("tt-view", v); render();
@@ -671,13 +670,51 @@ $("vday").onclick = () => setView("day");
 $("vweek").onclick = () => setView("week");
 $("vlist").onclick = () => setView("list");
 // swipe left/right to change day (day view) or week (list view)
+// the content follows the finger; it only changes day/week if released past a threshold or flicked
 let touch = null;
-$("view").addEventListener("touchstart", e => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
-$("view").addEventListener("touchend", e => {
-  if (!touch || view === "week") return;
-  const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y; touch = null;
-  if (Math.abs(dx) > 60 && Math.abs(dx) > 1.6 * Math.abs(dy)) step(dx < 0 ? 1 : -1);
+const viewEl = $("view");
+viewEl.addEventListener("touchstart", e => {
+  if (view === "week" || sliding || e.touches.length !== 1) { touch = null; return; }
+  const t = e.touches[0];
+  touch = { x: t.clientX, y: t.clientY, dx: 0, lock: null, t0: Date.now() };
 }, { passive: true });
+viewEl.addEventListener("touchmove", e => {
+  if (!touch) return;
+  const t = e.touches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+  if (!touch.lock && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) touch.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
+  if (touch.lock !== "x") return;
+  touch.dx = dx;
+  const W = viewEl.offsetWidth || 1;
+  viewEl.style.transform = `translateX(${dx}px)`;
+  viewEl.style.opacity = String(1 - Math.min(Math.abs(dx) / W, 1) * 0.5);
+}, { passive: true });
+function endSwipe() {
+  const s = touch; touch = null;
+  if (!s || s.lock !== "x") return;
+  const dx = s.dx, W = viewEl.offsetWidth || 1, dir = dx < 0 ? 1 : -1;
+  const speed = Math.abs(dx) / Math.max(1, Date.now() - s.t0);          // px per ms
+  const commit = Math.abs(dx) > W * 0.25 || (speed > 0.5 && Math.abs(dx) > 30);
+  const op = 1 - Math.min(Math.abs(dx) / W, 1) * 0.5;
+  viewEl.style.transform = ""; viewEl.style.opacity = "";
+  if (!commit) {                                                         // snap back
+    viewEl.animate([{ transform: `translateX(${dx}px)`, opacity: op }, { transform: "none", opacity: 1 }],
+      { duration: 200, easing: "ease-out" });
+    return;
+  }
+  sliding = true;
+  const out = viewEl.animate(
+    [{ transform: `translateX(${dx}px)`, opacity: op }, { transform: `translateX(${-dir * W}px)`, opacity: 0 }],
+    { duration: 160, easing: "ease-out", fill: "forwards" });
+  out.finished.then(() => {
+    go(dir);
+    out.cancel();
+    return viewEl.animate(
+      [{ transform: `translateX(${dir * W}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: 220, easing: "ease-out" }).finished;
+  }).catch(() => {}).finally(() => { sliding = false; });
+}
+viewEl.addEventListener("touchend", endSwipe, { passive: true });
+viewEl.addEventListener("touchcancel", endSwipe, { passive: true });
 $("showFree").checked = store.get("tt-free") !== "0";
 $("showRev").checked = store.get("tt-rev") !== "0";
 $("showFree").onchange = applyFilters;
