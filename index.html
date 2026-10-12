@@ -246,6 +246,7 @@ const DAY_START = 9, DAY_END = 17;                    // weekday study/class day
 const SPORT_DAY = 2, SPORT_START = [13, 0], SPORT_END = [15, 30];   // Wednesday 13:00-15:30
 const LUNCH_STARTS = [[12,0],[12,30],[13,0],[11,30],[13,30],[11,0],[14,0]];   // 1h lunch, in order of preference
 const CALL_SLOTS = 3;                                  // 1.5 hours
+const CALL_DAYS = [0, 2, 3, 5];                        // Mon (0), Wed (2), Thu (3), Sat (5)
 const JST_MIDNIGHT_UTC_HOUR = 15;                      // 00:00 in Japan (UTC+9, no DST) = 15:00 UTC
 const REVISION_PER_HOUR = 2;                           // hours of revision per timetabled hour
 const BEFORE_TYPES = ["tutorial", "seminar", "workshop", "problem class", "test"];   // revision must finish BEFORE these
@@ -348,10 +349,10 @@ function buildPlan(classes) {
     }
   }
 
-  // 1.5h call at midnight in Japan (15:00 UK in winter, 16:00 in summer); slides later (never earlier) if a class is in the way
+  // 1.5h call at midnight in Japan on Mon, Wed, Thu, Sat
   const calls = [];
   for (const d of dayRange(firstMonday - 7 * DAY, lastSun)) {
-    if (wd(d) >= 5) continue;
+    if (!CALL_DAYS.includes(wd(d))) continue;
     const ideal = herMidnightUk(d);
     for (let k = 0; k < 12; k++) {
       const a = ideal + k * SLOT, run = Array.from({ length: CALL_SLOTS }, (_, j) => a + j * SLOT);
@@ -484,10 +485,9 @@ function dayMarkT(w, refDay) { const n = Math.round((dayFloor(w) - refDay) / DAY
 function detail(ev) {
   if (ev.kind === "revision") return `for ${ev.forType} on ${fmtZ(ev.forS)}`;
   if (ev.kind === "call") {
-    const other = zone() === "JP"
+    return zone() === "JP"
       ? `${hhmm(utcToUkWall(ev.s))}–${hhmm(utcToUkWall(ev.e))} UK`
       : `${hhmm(jpWall(ev.s))}–${hhmm(jpWall(ev.e))} in Japan`;
-    return other + (ev.delay ? ` (delayed ${ev.delay / 2}h by a class)` : "");
   }
   return ev.location || "";
 }
@@ -728,7 +728,7 @@ function openInfo(ev) {
     add("Session room", esc(ev.forLoc || "Not listed"));
     add("Timing", ev.type.startsWith("Seminar") ? "Finishes before the session starts" : "Done after the lecture");
   }
-  if (ev.kind === "call") add("Timing", ev.delay ? `Moved ${ev.delay / 2}h later because of a class` : "Starts at midnight in Japan");
+  if (ev.kind === "call") add("Timing", "Starts at midnight in Japan");
   const title = isClass ? `${ev.code} · ${ev.type}` : ev.type;
   const sub = (isClass || isRev) ? `${isRev ? ev.code + " · " : ""}${ev.title}` : "";
   const colourBar = (isClass || isRev) ? `hsl(${hue(ev.code)} 55% 55%)` : (KIND_COLOUR[ev.kind] || "var(--accent)");
