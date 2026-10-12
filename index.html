@@ -6,7 +6,29 @@
 <meta name="theme-color" content="#68246d">
 <meta name="color-scheme" content="light only">
 <title>My Timetable</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity .5s ease;
+}
+#splash.hide {
+  opacity: 0;
+  pointer-events: none;
+}
+#splash img {
+  width: min(260px, 60vw);
+  height: auto;
+}
+
 :root{
   color-scheme:light;
   --bg:#f6f5f2; --panel:#fff; --ink:#1d1d1f; --muted:#6b6b72; --line:#e4e2dd;
@@ -125,6 +147,7 @@ html,body{overscroll-behavior-x:none}
 </style>
 </head>
 <body>
+<div id="splash"><img src="logo.png" alt="Durham University"></div>
 <header>
   <div>
     <h1>My Timetable</h1>
@@ -176,7 +199,18 @@ html,body{overscroll-behavior-x:none}
     <div id="mBody"></div>
   </div>
 </div>
-
+<script>
+(function () {
+  const splash = document.getElementById("splash");
+  const minTime = new Promise(r => setTimeout(r, 1000));
+  const loaded = new Promise(r => document.readyState === "complete" ? r() : window.addEventListener("load", r));
+  const safety = new Promise(r => setTimeout(r, 4000));     // never get stuck
+  Promise.race([Promise.all([minTime, loaded]), safety]).then(() => {
+    splash.classList.add("hide");
+    setTimeout(() => splash.remove(), 600);
+  });
+})();
+</script>
 <script>
 //<planner>
 // ---------------------------------------------------------------- time helpers
