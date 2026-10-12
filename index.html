@@ -193,6 +193,8 @@ html,body{overscroll-behavior-x:none}
     <span><i class="sw" style="border:1px dashed var(--muted)"></i>Free period</span>
     <label><input type="checkbox" id="showFree" checked> show free periods</label>
     <label><input type="checkbox" id="showRev" checked> show revision</label>
+    <label><input type="checkbox" id="showLunch" checked> show lunch breaks</label>
+    <label><input type="checkbox" id="showCalls" checked> show phone calls</label>
   </div>
 </main>
 
@@ -479,9 +481,22 @@ function setPlan(text) {
   applyFilters();
 }
 function applyFilters() {
-  const free = document.getElementById("showFree").checked, rev = document.getElementById("showRev").checked;
-  store.set("tt-free", free ? "1" : "0"); store.set("tt-rev", rev ? "1" : "0");
-  events = all.filter(e => (free || e.kind !== "free") && (rev || e.kind !== "revision"));
+  const free = document.getElementById("showFree").checked;
+  const rev = document.getElementById("showRev").checked;
+  const lunch = document.getElementById("showLunch").checked;
+  const call = document.getElementById("showCalls").checked;
+
+  store.set("tt-free", free ? "1" : "0");
+  store.set("tt-rev", rev ? "1" : "0");
+  store.set("tt-lunch", lunch ? "1" : "0");
+  store.set("tt-call", call ? "1" : "0");
+
+  events = all.filter(e =>
+    (free || e.kind !== "free") &&
+    (rev || e.kind !== "revision") &&
+    (lunch || e.kind !== "lunch") &&
+    (call || e.kind !== "call")
+  );
   render();
 }
 
@@ -800,8 +815,14 @@ viewEl.addEventListener("touchend", endSwipe, { passive: true });
 viewEl.addEventListener("touchcancel", () => { const s = touch; touch = null; if (s && s.dx) snapBack(s.dx); }, { passive: true });
 $("showFree").checked = store.get("tt-free") !== "0";
 $("showRev").checked = store.get("tt-rev") !== "0";
+$("showLunch").checked = store.get("tt-lunch") !== "0";
+$("showCalls").checked = store.get("tt-call") !== "0";
+
 $("showFree").onchange = applyFilters;
 $("showRev").onchange = applyFilters;
+$("showLunch").onchange = applyFilters;
+$("showCalls").onchange = applyFilters;
+
 document.querySelectorAll("#zoneSeg button").forEach(b => b.onclick = () => { zonePref = b.dataset.z; store.set("tz-pref", zonePref); render(); });
 $("loadbtn").onclick = $("pick").onclick = () => $("file").click();
 $("file").onchange = async e => {
