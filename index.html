@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#68246d">
 <title>My Timetable</title>
 <style>
 :root{
@@ -13,6 +14,7 @@
   :root{ --bg:#131316; --panel:#1c1c21; --ink:#ececf0; --muted:#9a9aa5; --line:#2c2c34; --today:#2a2616; --accent:#c78bd0; }
 }
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;max-width:1200px;margin:0 auto}
 h1{font-size:20px;margin:0}
@@ -65,6 +67,31 @@ main{max-width:1200px;margin:0 auto;padding:0 20px 40px}
 #warn{background:#fdecea;color:#7a1d12;border:1px solid #f3b8b0;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px}
 #loader{background:var(--panel);border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;margin-bottom:16px}
 #zoneNote{max-width:1200px;margin:0 auto;padding:0 20px 10px}
+.gridwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px}
+.gridwrap .grid{min-width:680px}
+.gridwrap.day .grid{min-width:0}
+button{min-height:38px;touch-action:manipulation}
+#view{touch-action:pan-y}
+@media (max-width:700px){
+  body{font-size:14px}
+  header{padding:12px 14px 8px;gap:8px}
+  h1{font-size:18px}
+  .controls{width:100%;gap:6px}
+  .seg{width:100%}
+  .seg button{flex:1}
+  #prev,#nextw{flex:none;min-width:46px}
+  .range{flex:1 1 calc(100% - 120px);min-width:0;font-size:15px}
+  #today,#vday,#vweek,#vlist,#loadbtn{flex:1 1 0;padding:7px 4px;font-size:13px;white-space:nowrap}
+  main{padding:0 12px 28px}
+  #zoneNote{padding:0 14px 8px;font-size:12px}
+  #next{padding:10px 12px;font-size:14px}
+  .legend{gap:6px 12px;font-size:12px}
+  .row{flex-direction:column;gap:2px}
+  .row .time{width:auto}
+  .list-day h3{padding:10px 12px}
+  .colhead{font-size:14px}
+  footer{padding:0 14px 24px}
+}
 footer{max-width:1200px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:12px}
 </style>
 </head>
@@ -82,7 +109,8 @@ footer{max-width:1200px;margin:0 auto;padding:0 20px 30px;color:var(--muted);fon
     <div class="range" id="range"></div>
     <button id="nextw" aria-label="Next week">&rarr;</button>
     <button id="today">Today</button>
-    <button id="vweek" class="on">Week</button>
+    <button id="vday">Day</button>
+    <button id="vweek">Week</button>
     <button id="vlist">List</button>
     <button id="loadbtn" title="Load a different .ics file">Load .ics</button>
     <input type="file" id="file" accept=".ics,text/calendar" hidden>
@@ -110,7 +138,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 20px 30px;color:var(--muted);fon
   <div class="sub" id="stats" style="margin-bottom:10px"></div>
   <div id="view"></div>
 </main>
-<footer>Adjusted Based off UK and Japan Time</footer>
+<footer>Your .ics holds UK times. The Japan view converts them (Japan is UTC+9 all year, the UK moves between GMT and BST), so the call lands at 00:00 in Japan every day. In Japan view, columns are still your UK study days; “+1” means after midnight in Japan.</footer>
 
 <script>
 //<planner>
@@ -322,8 +350,10 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
 };
-let all = [], events = [], view = "week", zonePref = store.get("tz-pref") || "auto", detected = detect();
-let weekStart = mondayOf(utcToUkWall(Date.now()));
+const isPhone = () => window.matchMedia && window.matchMedia("(max-width: 700px)").matches;
+const todayUk = () => dayFloor(utcToUkWall(Date.now()));
+let all = [], events = [], view = isPhone() ? "day" : "week", zonePref = store.get("tz-pref") || "auto", detected = detect();
+let weekStart = mondayOf(utcToUkWall(Date.now())), dayStart = todayUk();
 
 function detect() {
   let tz = "";
@@ -418,31 +448,37 @@ function layoutDay(list) {      // lay overlapping events side by side
 }
 
 function renderWeek() {
-  const end = weekStart + 7 * DAY, todayUk = dayFloor(utcToUkWall(Date.now()));
-  const weekEvents = events.filter(e => e.sw >= weekStart && e.sw < end);
-  const days = [0, 1, 2, 3, 4].map(i => weekStart + i * DAY);
-  if (weekEvents.some(e => wd(e.sw) === 5)) days.push(weekStart + 5 * DAY);
-  if (weekEvents.some(e => wd(e.sw) === 6)) { if (days.length === 5) days.push(weekStart + 5 * DAY); days.push(weekStart + 6 * DAY); }
+  const end = weekStart + 7 * DAY, today = todayUk();
+  let days;
+  if (view === "day") days = [dayStart];
+  else {
+    const wk = events.filter(e => e.sw >= weekStart && e.sw < end);
+    days = [0, 1, 2, 3, 4].map(i => weekStart + i * DAY);
+    if (wk.some(e => wd(e.sw) === 5)) days.push(weekStart + 5 * DAY);
+    if (wk.some(e => wd(e.sw) === 6)) { if (days.length === 5) days.push(weekStart + 5 * DAY); days.push(weekStart + 6 * DAY); }
+  }
+  const weekEvents = events.filter(e => days.includes(dayFloor(e.sw)));
+  const base = days.length === 1 ? days[0] : weekStart;
   let sH = START_H, eH = END_H;
   weekEvents.forEach(e => { const d0 = dayFloor(e.sw); sH = Math.min(sH, Math.floor((e.sw - d0) / H)); eH = Math.max(eH, Math.ceil((e.ew - d0) / H)); });
   const Ht = (eH - sH) * PX;
   const g = document.createElement("div");
   g.className = "grid";
-  g.style.gridTemplateColumns = `56px repeat(${days.length}, 1fr)`;
+  g.style.gridTemplateColumns = `${days.length === 1 ? 52 : 56}px repeat(${days.length}, 1fr)`;
   g.innerHTML = `<div class="colhead"></div>` + days.map(d => {
     const x = new Date(d);
-    return `<div class="colhead ${d === todayUk ? "today" : ""}">${DOW[x.getUTCDay()]}<small>${fmtDayShort(d)}</small></div>`;
+    return `<div class="colhead ${d === today ? "today" : ""}">${DOW[x.getUTCDay()]}<small>${fmtDayShort(d)}</small></div>`;
   }).join("");
   // axis labels: UK study hours, shown on the chosen clock
   const axis = Array.from({ length: eH - sH }, (_, i) => {
-    const a = inZone(wallToUtc(weekStart + (sH + i) * H));
-    return `<div class="hour" style="top:${i * PX}px">${hhmm(a)}${dayMark(a, weekStart)}</div>`;
+    const a = inZone(wallToUtc(base + (sH + i) * H));
+    return `<div class="hour" style="top:${i * PX}px">${hhmm(a)}${dayMark(a, base)}</div>`;
   }).join("");
   const lines = Array.from({ length: eH - sH }, (_, i) => `<div class="hour" style="top:${i * PX}px"></div>`).join("");
   const tc = document.createElement("div"); tc.className = "timecol"; tc.style.height = Ht + "px"; tc.innerHTML = axis; g.appendChild(tc);
   days.forEach(d => {
     const col = document.createElement("div");
-    col.className = "daycol" + (d === todayUk ? " today" : "");
+    col.className = "daycol" + (d === today ? " today" : "");
     col.style.height = Ht + "px";
     col.innerHTML = lines;
     layoutDay(weekEvents.filter(e => dayFloor(e.sw) === d)).forEach(ev => {
@@ -462,12 +498,13 @@ function renderWeek() {
     g.appendChild(col);
   });
   const v = document.getElementById("view"); v.innerHTML = "";
-  v.appendChild(g);
-  if (!weekEvents.length) { const m = document.createElement("div"); m.className = "empty"; m.textContent = "Nothing scheduled this week."; v.appendChild(m); }
+  const wrap = document.createElement("div"); wrap.className = "gridwrap" + (view === "day" ? " day" : "");
+  wrap.appendChild(g); v.appendChild(wrap);
+  if (!weekEvents.length) { const m = document.createElement("div"); m.className = "empty"; m.textContent = view === "day" ? "Nothing scheduled — a day off." : "Nothing scheduled this week."; v.appendChild(m); }
 }
 
 function renderList() {
-  const end = weekStart + 7 * DAY, todayUk = dayFloor(utcToUkWall(Date.now()));
+  const end = weekStart + 7 * DAY, today = todayUk();
   const list = events.filter(e => e.sw >= weekStart && e.sw < end);
   const v = document.getElementById("view"); v.innerHTML = "";
   if (!list.length) { v.innerHTML = `<div class="empty">Nothing scheduled this week.</div>`; return; }
@@ -475,7 +512,7 @@ function renderList() {
     const d = weekStart + i * DAY, items = list.filter(e => dayFloor(e.sw) === d);
     if (!items.length) continue;
     const box = document.createElement("div");
-    box.className = "list-day" + (d === todayUk ? " today" : "");
+    box.className = "list-day" + (d === today ? " today" : "");
     box.innerHTML = `<h3>${fmtDayLong(d)}${zone() === "JP" ? ' <span class="sub">(UK study day)</span>' : ""}</h3>` + items.map(e =>
       ["free", "sport", "lunch", "call"].includes(e.kind)
         ? `<div class="row"><div class="time">${timeText(e)}</div><div><b>${esc(e.type)}</b>${detail(e) ? `<div class="sub">${esc(detail(e))}</div>` : ""}</div></div>`
@@ -496,24 +533,45 @@ function renderStats() {
 
 function render() {
   const end = weekStart + 6 * DAY;
-  document.getElementById("range").textContent = `${fmtDayShort(weekStart)} – ${fmtDayShort(end)} ${new Date(end).getUTCFullYear()}`;
+  document.getElementById("range").textContent = view === "day"
+    ? `${DOW[new Date(dayStart).getUTCDay()]} ${fmtDayShort(dayStart)} ${new Date(dayStart).getUTCFullYear()}`
+    : `${fmtDayShort(weekStart)} – ${fmtDayShort(end)} ${new Date(end).getUTCFullYear()}`;
+  document.getElementById("vday").classList.toggle("on", view === "day");
   document.getElementById("vweek").classList.toggle("on", view === "week");
   document.getElementById("vlist").classList.toggle("on", view === "list");
   document.querySelectorAll("#zoneSeg button").forEach(b => b.classList.toggle("on", b.dataset.z === zonePref));
   const auto = zonePref === "auto";
   document.getElementById("zoneNote").textContent =
-    `Showing ${zoneName(weekStart)}` + (auto ? ` — chosen automatically from your device's time zone${detected.tz ? " (" + detected.tz + ")" : ""}. Use the buttons to switch.` : ".");
+    `Showing ${zoneName(view === "day" ? dayStart : weekStart)}` + (auto ? ` — chosen automatically from your device's time zone${detected.tz ? " (" + detected.tz + ")" : ""}. Use the buttons to switch.` : ".");
   renderNext(); renderStats();
-  view === "week" ? renderWeek() : renderList();
+  view === "list" ? renderList() : renderWeek();
 }
 
 // ---------------------------------------------------------------- wiring
 const $ = id => document.getElementById(id);
-$("prev").onclick = () => { weekStart -= 7 * DAY; render(); };
-$("nextw").onclick = () => { weekStart += 7 * DAY; render(); };
-$("today").onclick = () => { weekStart = mondayOf(utcToUkWall(Date.now())); render(); };
-$("vweek").onclick = () => { view = "week"; render(); };
-$("vlist").onclick = () => { view = "list"; render(); };
+function step(dir) {
+  if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
+  else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
+  render();
+}
+function setView(v) {
+  if (v === "day" && view !== "day") { const t = todayUk(); dayStart = (t >= weekStart && t < weekStart + 7 * DAY) ? t : weekStart; }
+  view = v; render();
+}
+$("prev").onclick = () => step(-1);
+$("nextw").onclick = () => step(1);
+$("today").onclick = () => { dayStart = todayUk(); weekStart = mondayOf(dayStart); render(); };
+$("vday").onclick = () => setView("day");
+$("vweek").onclick = () => setView("week");
+$("vlist").onclick = () => setView("list");
+// swipe left/right to change day (day view) or week (list view)
+let touch = null;
+$("view").addEventListener("touchstart", e => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
+$("view").addEventListener("touchend", e => {
+  if (!touch || view === "week") return;
+  const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y; touch = null;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > 1.6 * Math.abs(dy)) step(dx < 0 ? 1 : -1);
+}, { passive: true });
 $("showFree").onchange = applyFilters;
 $("showRev").onchange = applyFilters;
 document.querySelectorAll("#zoneSeg button").forEach(b => b.onclick = () => { zonePref = b.dataset.z; store.set("tz-pref", zonePref); render(); });
