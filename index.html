@@ -246,9 +246,9 @@ const DAY_START = 9, DAY_END = 17;                    // weekday study/class day
 const SPORT_DAY = 2, SPORT_START = [13, 0], SPORT_END = [15, 30];   // Wednesday 13:00-15:30
 const LUNCH_STARTS = [[12,0],[12,30],[13,0],[11,30],[13,30],[11,0],[14,0]];   // 1h lunch, in order of preference
 const CALL_SLOTS = 3;                                   // 1.5 hours
-const CALL_DAYS = [0, 2, 3, 5];                        // Mon (0), Wed (2), Thu (3), Sat (5)
-const JST_MIDNIGHT_UTC_HOUR = 15;                      // 00:00 in Japan (UTC+9, no DST) = 15:00 UTC
-const REVISION_PER_HOUR = 2;                           // hours of revision per timetabled hour
+const CALL_DAYS = [0, 2, 3, 5];                         // Mon (0), Wed (2), Thu (3), Sat (5)
+const JST_MIDNIGHT_UTC_HOUR = 15;                       // 00:00 in Japan (UTC+9, no DST) = 15:00 UTC
+const REVISION_PER_HOUR = 2;                            // hours of revision per timetabled hour
 const BEFORE_TYPES = ["tutorial", "seminar", "workshop", "problem class", "test"];   // revision must finish BEFORE these
 
 const W = (y, m, d, h = 0, mi = 0) => Date.UTC(y, m, d, h, mi);
@@ -292,7 +292,7 @@ function makeEvent(raw) {
   const j = rest.lastIndexOf(" - ");
   if (j >= 0) { title = rest.slice(0, j); kind = rest.slice(j + 3); }
   return { code: code.trim(), title: title.trim(), type: kind.trim(), location: unescapeIcs(raw.LOCATION || "").trim(),
-            sw: parseDt(raw.DTSTART), ew: parseDt(raw.DTEND) };
+           sw: parseDt(raw.DTSTART), ew: parseDt(raw.DTEND) };
 }
 function parseIcs(text) {
   const events = []; let cur = null;
@@ -874,14 +874,12 @@ load();
 let lastHour = Math.floor(Date.now() / H);
 setInterval(() => { renderNext(); const h = Math.floor(Date.now() / H); if (h !== lastHour && !touch && !sliding) { lastHour = h; render(); } }, 60000);
 
-// Prevent pinch-to-zoom on iOS Safari
+// Prevent pinch-to-zoom gestures on mobile touchscreens only
 document.addEventListener('gesturestart', function (e) {
   e.preventDefault();
 });
-
-// Prevent Ctrl / Cmd + wheel zoom on trackpads and desktop
-document.addEventListener('wheel', function (e) {
-  if (e.ctrlKey) {
+document.addEventListener('touchmove', function (e) {
+  if (e.touches.length > 1) {
     e.preventDefault();
   }
 }, { passive: false });
