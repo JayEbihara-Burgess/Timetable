@@ -28,8 +28,16 @@ button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .seg button:first-child{border-radius:8px 0 0 8px;margin-left:0}
 .seg button:last-child{border-radius:0 8px 8px 0}
 main{max-width:1200px;margin:0 auto;padding:0 20px 40px}
-#next{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:12px 16px;margin-bottom:12px}
-#next b{font-size:16px}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+#next{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:14px 18px;margin-bottom:12px}
+#next .now{font-size:26px;line-height:1.2;font-weight:500}
+#next .now b{font-weight:700}
+#next .lbl{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--accent);border-radius:6px;padding:3px 9px;margin-right:10px;vertical-align:middle;font-weight:700}
+#next .when{display:block;font-size:15px;color:var(--muted);font-weight:400;margin-top:4px}
+#next .nxt{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+#next .nxt b{font-size:13px;color:var(--ink);font-weight:600}
+.nowband{position:absolute;left:0;right:0;z-index:3;pointer-events:none;background:rgba(104,36,109,.10);border-top:2px solid var(--accent);border-bottom:1px solid rgba(104,36,109,.35)}
+.hour.nowhour{color:#fff;background:var(--accent);font-weight:700;border-radius:0 6px 6px 0;height:19px;line-height:19px;width:52px;padding-left:6px;z-index:3}
 .range{font-weight:600;min-width:200px;text-align:center}
 .grid{display:grid;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .colhead{padding:8px 4px;text-align:center;border-bottom:1px solid var(--line);font-weight:600;font-size:13px;background:var(--panel)}
@@ -61,7 +69,7 @@ main{max-width:1200px;margin:0 auto;padding:0 20px 40px}
 .row .time{width:130px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
 .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;color:#111;margin-left:6px}
 .empty{padding:30px;text-align:center;color:var(--muted)}
-.legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;color:var(--muted);margin:0 0 12px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;color:var(--muted);margin:14px 0 0}
 .legend label{cursor:pointer;display:flex;gap:5px;align-items:center}
 .ev,.row[data-i]{cursor:pointer}
 .ev:hover,.ev:focus-visible{filter:brightness(.96);outline:2px solid var(--accent);outline-offset:-2px}
@@ -98,7 +106,9 @@ button{min-height:38px;touch-action:manipulation}
   #today,#vday,#vweek,#vlist,#loadbtn{flex:1 1 0;padding:7px 4px;font-size:13px;white-space:nowrap}
   main{padding:0 12px 28px}
   #zoneNote{padding:0 14px 8px;font-size:12px}
-  #next{padding:10px 12px;font-size:14px}
+  #next{padding:12px 14px}
+  #next .now{font-size:21px}
+  #next .when{font-size:14px}
   .legend{gap:6px 12px;font-size:12px}
   .row{flex-direction:column;gap:2px}
   .row .time{width:auto}
@@ -117,15 +127,6 @@ button{min-height:38px;touch-action:manipulation}
     <div class="seg" id="zoneSeg" role="group" aria-label="Time zone">
       <button data-z="auto">Auto</button><button data-z="UK">UK</button><button data-z="JP">Japan</button>
     </div>
-    <button id="prev" aria-label="Previous week">&larr;</button>
-    <div class="range" id="range"></div>
-    <button id="nextw" aria-label="Next week">&rarr;</button>
-    <button id="today">Today</button>
-    <button id="vday">Day</button>
-    <button id="vweek">Week</button>
-    <button id="vlist">List</button>
-    <button id="loadbtn" title="Load a different .ics file">Load .ics</button>
-    <input type="file" id="file" accept=".ics,text/calendar" hidden>
   </div>
 </header>
 <div class="sub" id="zoneNote"></div>
@@ -136,7 +137,20 @@ button{min-height:38px;touch-action:manipulation}
     <button id="pick">Choose .ics file…</button>
   </div>
   <div id="next"></div>
+  <div class="toolbar">
+    <button id="prev" aria-label="Previous week">&larr;</button>
+    <div class="range" id="range"></div>
+    <button id="nextw" aria-label="Next week">&rarr;</button>
+    <button id="today">Today</button>
+    <button id="vday">Day</button>
+    <button id="vweek">Week</button>
+    <button id="vlist">List</button>
+    <button id="loadbtn" title="Load a different .ics file">Load .ics</button>
+    <input type="file" id="file" accept=".ics,text/calendar" hidden>
+  </div>
   <div id="warn" hidden></div>
+  <div class="sub" id="stats" style="margin-bottom:10px"></div>
+  <div id="view"></div>
   <div class="legend">
     <span><i class="sw" style="background:hsl(210 70% 80%)"></i>Class</span>
     <span><i class="sw" style="background:hsl(210 75% 94%);border:1px dashed rgba(0,0,0,.3);border-left:4px dashed hsl(210 55% 45%)"></i>Revision (dashed)</span>
@@ -147,8 +161,6 @@ button{min-height:38px;touch-action:manipulation}
     <label><input type="checkbox" id="showFree" checked> show free periods</label>
     <label><input type="checkbox" id="showRev" checked> show revision</label>
   </div>
-  <div class="sub" id="stats" style="margin-bottom:10px"></div>
-  <div id="view"></div>
 </main>
 
 <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle">
@@ -431,18 +443,21 @@ function applyFilters() {
 
 function renderNext() {
   const now = Date.now(), el = document.getElementById("next");
-  const cur = events.find(e => e.kind === "class" && e.s <= now && now < e.e);
-  const nxt = events.find(e => e.kind === "class" && e.s > now);
-  const act = events.find(e => ["revision", "sport", "lunch", "call"].includes(e.kind) && e.s <= now && now < e.e);
-  const fr = events.find(e => e.kind === "free" && e.s <= now && now < e.e);
-  const untilT = e => hhmm(inZone(e.e));
-  let html = "";
-  if (cur) html += `<div>Now: <b>${esc(cur.code)} ${esc(cur.title)}</b> (${esc(cur.type)}) in ${esc(cur.location)} until ${untilT(cur)}</div>`;
-  if (!cur && act) html += `<div>Now: <b>${esc(act.type)}</b>${act.kind === "revision" ? ` · ${esc(act.code)} ${esc(act.title)} (${esc(detail(act))})` : ""} until ${untilT(act)}</div>`;
-  if (!cur && !act && fr) html += `<div>Now: <b>Free period</b> until ${untilT(fr)}</div>`;
-  if (nxt) html += `<div>Next: <b>${esc(nxt.code)} ${esc(nxt.title)}</b> (${esc(nxt.type)}) · ${fmtZ(nxt.s)} · ${esc(nxt.location)}</div>`;
-  if (!html) html = all.length ? "No upcoming sessions." : "Loading…";
-  el.innerHTML = html;
+  if (!all.length) { el.innerHTML = '<div class="now"><span class="lbl">Now</span><b>Loading…</b></div>'; return; }
+  const cur = all.find(e => e.kind === "class" && e.s <= now && now < e.e);
+  const nxt = all.find(e => e.kind === "class" && e.s > now);
+  const act = all.find(e => ["revision", "sport", "lunch", "call"].includes(e.kind) && e.s <= now && now < e.e);
+  const fr = all.find(e => e.kind === "free" && e.s <= now && now < e.e);
+  const until = e => `until ${hhmm(inZone(e.e))}`;
+  let nowHtml;
+  if (cur) nowHtml = `<b>${esc(cur.code)} ${esc(cur.title)}</b> · ${esc(cur.type)}<span class="when">${cur.location ? "in " + esc(cur.location) + " · " : ""}${until(cur)}</span>`;
+  else if (act) nowHtml = `<b>${esc(act.type)}</b>${act.kind === "revision" ? ` · ${esc(act.code)} ${esc(act.title)}` : ""}<span class="when">${esc(detail(act))}${detail(act) ? " · " : ""}${until(act)}</span>`;
+  else if (fr) nowHtml = `<b>Free period</b><span class="when">${until(fr)}</span>`;
+  else nowHtml = `<b>Nothing scheduled</b><span class="when">Outside your timetable hours</span>`;
+  const nextHtml = nxt
+    ? `<div class="nxt">Next: <b>${esc(nxt.code)} ${esc(nxt.title)}</b> (${esc(nxt.type)}) · ${fmtZ(nxt.s)}${nxt.location ? " · " + esc(nxt.location) : ""}</div>`
+    : `<div class="nxt">No more classes scheduled.</div>`;
+  el.innerHTML = `<div class="now"><span class="lbl">Now</span>${nowHtml}</div>${nextHtml}`;
 }
 
 function layoutDay(list) {      // lay overlapping events side by side
@@ -482,6 +497,7 @@ function renderWeek() {
   let sH = START_H, eH = END_H;
   weekEvents.forEach(e => { const d0 = dayFloor(e.sw); sH = Math.min(sH, Math.floor((e.sw - d0) / H)); eH = Math.max(eH, Math.ceil((e.ew - d0) / H)); });
   const Ht = (eH - sH) * PX;
+  const nowW = utcToUkWall(Date.now()), nowDay = dayFloor(nowW), nowHr = Math.floor((nowW - nowDay) / H);
   const g = document.createElement("div");
   g.className = "grid";
   g.style.gridTemplateColumns = `${days.length === 1 ? 52 : 56}px repeat(${days.length}, 1fr)`;
@@ -492,7 +508,7 @@ function renderWeek() {
   // axis labels: UK study hours, shown on the chosen clock
   const axis = Array.from({ length: eH - sH }, (_, i) => {
     const a = inZone(wallToUtc(base + (sH + i) * H));
-    return `<div class="hour" style="top:${i * PX}px">${hhmm(a)}${dayMark(a, base)}</div>`;
+    return `<div class="hour${days.includes(nowDay) && sH + i === nowHr ? " nowhour" : ""}" style="top:${i * PX}px">${hhmm(a)}${dayMark(a, base)}</div>`;
   }).join("");
   const lines = Array.from({ length: eH - sH }, (_, i) => `<div class="hour" style="top:${i * PX}px"></div>`).join("");
   const tc = document.createElement("div"); tc.className = "timecol"; tc.style.height = Ht + "px"; tc.innerHTML = axis; g.appendChild(tc);
@@ -516,6 +532,10 @@ function renderWeek() {
         : `<b>${esc(ev.code)} · ${esc(ev.type)}</b> ${esc(ev.title)}<div class="t">${timeText(ev)} · ${esc(detail(ev))}</div>`;
       col.appendChild(div);
     });
+    if (d === nowDay && nowHr >= sH && nowHr < eH) {
+      const band = document.createElement("div"); band.className = "nowband";
+      band.style.cssText = `top:${(nowHr - sH) * PX}px;height:${PX}px`; col.appendChild(band);
+    }
     g.appendChild(col);
   });
   const v = document.getElementById("view"); v.innerHTML = "";
@@ -667,7 +687,8 @@ async function load() {
   }
 }
 load();
-setInterval(renderNext, 60000);
+let lastHour = Math.floor(Date.now() / H);
+setInterval(() => { renderNext(); const h = Math.floor(Date.now() / H); if (h !== lastHour) { lastHour = h; render(); } }, 60000);
 </script>
 </body>
 </html>
