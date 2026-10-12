@@ -245,7 +245,7 @@ const H = 36e5, SLOT = 18e5, DAY = 864e5;
 const DAY_START = 9, DAY_END = 17;                    // weekday study/class day: 09:00-17:00 (UK)
 const SPORT_DAY = 2, SPORT_START = [13, 0], SPORT_END = [15, 30];   // Wednesday 13:00-15:30
 const LUNCH_STARTS = [[12,0],[12,30],[13,0],[11,30],[13,30],[11,0],[14,0]];   // 1h lunch, in order of preference
-const CALL_SLOTS = 3;                                  // 1.5 hours
+const CALL_SLOTS = 3;                                   // 1.5 hours
 const CALL_DAYS = [0, 2, 3, 5];                        // Mon (0), Wed (2), Thu (3), Sat (5)
 const JST_MIDNIGHT_UTC_HOUR = 15;                      // 00:00 in Japan (UTC+9, no DST) = 15:00 UTC
 const REVISION_PER_HOUR = 2;                           // hours of revision per timetabled hour
@@ -281,7 +281,7 @@ function parseDt(value) {
   const m = /^(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)(Z?)$/.exec(value.trim());
   if (!m) throw new Error("unsupported date " + value);
   const w = W(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-  return m[7] ? utcToUkWall(w) : w;                   // a trailing Z means UTC; convert to UK clock time
+  return m[7] ? utcToUkWall(w) : w;                    // a trailing Z means UTC; convert to UK clock time
 }
 function makeEvent(raw) {
   const summary = unescapeIcs(raw.SUMMARY || "");
@@ -292,7 +292,7 @@ function makeEvent(raw) {
   const j = rest.lastIndexOf(" - ");
   if (j >= 0) { title = rest.slice(0, j); kind = rest.slice(j + 3); }
   return { code: code.trim(), title: title.trim(), type: kind.trim(), location: unescapeIcs(raw.LOCATION || "").trim(),
-           sw: parseDt(raw.DTSTART), ew: parseDt(raw.DTEND) };
+            sw: parseDt(raw.DTSTART), ew: parseDt(raw.DTEND) };
 }
 function parseIcs(text) {
   const events = []; let cur = null;
@@ -318,7 +318,7 @@ function buildPlan(classes) {
   const sessions = classes.map(c => ({ ...c, s: c.sw, e: c.ew, hours: (c.ew - c.sw) / H }));
   if (!sessions.length) return { events: [], warnings: [] };
 
-  const busy = new Set();                              // occupied 30-min slots (class, sport, lunch, call, revision)
+  const busy = new Set();                             // occupied 30-min slots (class, sport, lunch, call, revision)
   for (const x of sessions) for (let t = x.s; t < x.e; t += SLOT) busy.add(t);
 
   const firstDay = dayFloor(Math.min(...sessions.map(x => x.s)));
@@ -576,8 +576,8 @@ function buildGrid(anchor) {      // anchor = a day (day view) or a Monday (week
   else {
     const wk = events.filter(e => e.sw >= weekStart && e.sw < end);
     days = [0, 1, 2, 3, 4].map(i => weekStart + i * DAY);
-    if (wk.some(e => wd(e.sw) === 5)) days.push(weekStart + 5 * DAY);
-    if (wk.some(e => wd(e.sw) === 6)) { if (days.length === 5) days.push(weekStart + 5 * DAY); days.push(weekStart + 6 * DAY); }
+    if (wk.some(e => e.kind === "revision" && wd(e.sw) === 5)) days.push(weekStart + 5 * DAY);
+    if (wk.some(e => e.kind === "revision" && wd(e.sw) === 6)) { if (days.length === 5) days.push(weekStart + 5 * DAY); days.push(weekStart + 6 * DAY); }
   }
   const weekEvents = events.filter(e => days.includes(dayFloor(e.sw)));
   const base = days.length === 1 ? days[0] : weekStart;
@@ -750,7 +750,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("modal"
 
 // the track holds [previous | current | next]; sliding it reveals the neighbour, then we re-render centred on it
 let sliding = false;
-const BASE = -100 / 3;                                   // % of track width that centres the middle panel
+const BASE = -100 / 3;                                  // % of track width that centres the middle panel
 const trackEl = () => $("view").firstElementChild;
 const pos = px => `translateX(calc(${BASE}% + ${px}px))`;
 const reduceMotion = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
