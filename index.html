@@ -27,7 +27,7 @@ button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .seg button{border-radius:0;margin-left:-1px}
 .seg button:first-child{border-radius:8px 0 0 8px;margin-left:0}
 .seg button:last-child{border-radius:0 8px 8px 0}
-main{max-width:1200px;margin:0 auto;padding:0 20px 40px}
+main{max-width:1200px;margin:0 auto;padding:0 20px 40px;overflow-x:hidden}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 #next{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:14px 18px;margin-bottom:12px}
 #next .now{font-size:26px;line-height:1.2;font-weight:500}
@@ -635,10 +635,30 @@ $("mClose").onclick = closeInfo;
 $("modal").addEventListener("click", e => { if (e.target === $("modal")) closeInfo(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("modal").hidden) closeInfo(); });
 
+// slide the old content out and the new content in, in the direction of travel
+let sliding = false;
+function slide(dir, change) {
+  const v = $("view");
+  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!v.animate || reduce || sliding) { change(); return; }
+  sliding = true;
+  const out = v.animate(
+    [{ transform: "none", opacity: 1 }, { transform: `translateX(${-dir * 40}px)`, opacity: 0 }],
+    { duration: 130, easing: "ease-in", fill: "forwards" });
+  out.finished.then(() => {
+    change();
+    out.cancel();
+    return v.animate(
+      [{ transform: `translateX(${dir * 40}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: 190, easing: "ease-out" }).finished;
+  }).catch(() => {}).finally(() => { sliding = false; });
+}
 function step(dir) {
-  if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
-  else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
-  render();
+  slide(dir, () => {
+    if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
+    else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
+    render();
+  });
 }
 function setView(v) {
   if (v === "day" && view !== "day") { const t = todayUk(); dayStart = (t >= weekStart && t < weekStart + 7 * DAY) ? t : weekStart; }
