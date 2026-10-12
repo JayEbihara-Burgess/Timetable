@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Timetable</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#fff; --ink:#1d1d1f; --muted:#6b6b72; --line:#e4e2dd;
+  --today:#fff8e6; --accent:#68246d;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#131316; --panel:#1c1c21; --ink:#ececf0; --muted:#9a9aa5; --line:#2c2c34; --today:#2a2616; --accent:#c78bd0; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;max-width:1200px;margin:0 auto}
+h1{font-size:20px;margin:0}
+.sub{color:var(--muted);font-size:13px}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.seg{display:inline-flex}
+.seg button{border-radius:0;margin-left:-1px}
+.seg button:first-child{border-radius:8px 0 0 8px;margin-left:0}
+.seg button:last-child{border-radius:0 8px 8px 0}
+main{max-width:1200px;margin:0 auto;padding:0 20px 40px}
+#next{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:12px 16px;margin-bottom:12px}
+#next b{font-size:16px}
+.range{font-weight:600;min-width:200px;text-align:center}
+.grid{display:grid;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.colhead{padding:8px 4px;text-align:center;border-bottom:1px solid var(--line);font-weight:600;font-size:13px;background:var(--panel)}
+.colhead small{display:block;color:var(--muted);font-weight:400}
+.colhead.today{background:var(--today)}
+.timecol,.daycol{position:relative}
+.daycol{border-left:1px solid var(--line)}
+.daycol.today{background:var(--today)}
+.hour{position:absolute;left:0;right:0;border-top:1px solid var(--line);font-size:11px;color:var(--muted);padding-left:6px}
+.daycol .hour{padding:0}
+.plus{font-size:9px;vertical-align:super;margin-left:1px}
+.ev{position:absolute;border-radius:8px;padding:5px 7px;font-size:12px;line-height:1.3;overflow:hidden;color:#111;border-left:4px solid rgba(0,0,0,.35);cursor:default}
+.ev b{display:block;font-size:12.5px}
+.ev .t{opacity:.75}
+.ev.revision{border:1px dashed rgba(0,0,0,.28);border-left:4px dashed;background-image:repeating-linear-gradient(135deg,transparent 0 7px,rgba(255,255,255,.55) 7px 14px)}
+.ev.tiny{padding:2px 7px;white-space:nowrap;text-overflow:ellipsis}
+.ev.tiny b{display:inline;font-size:12px}
+.ev.tiny .t,.ev.tiny br{display:none}
+.ev.sport{background:#ffe08a !important;border-left-color:#b07d00}
+.ev.lunch{background:#ffd3b8 !important;border-left-color:#c2612a}
+.ev.call{background:#f9c6dd !important;border-left-color:#c2306b}
+.ev.free{background:transparent !important;border:1px dashed var(--line);border-left:4px dashed var(--line);color:var(--muted)}
+.ev.free .t{opacity:1}
+.list-day{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.list-day h3{margin:0;padding:10px 14px;font-size:14px;border-bottom:1px solid var(--line)}
+.list-day.today h3{background:var(--today)}
+.row{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .time{width:130px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;color:#111;margin-left:6px}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;color:var(--muted);margin:0 0 12px}
+.legend label{cursor:pointer;display:flex;gap:5px;align-items:center}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;border-left:4px solid rgba(0,0,0,.35);vertical-align:-3px;margin-right:4px}
+#warn{background:#fdecea;color:#7a1d12;border:1px solid #f3b8b0;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+#loader{background:var(--panel);border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;margin-bottom:16px}
+#zoneNote{max-width:1200px;margin:0 auto;padding:0 20px 10px}
+footer{max-width:1200px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>My Timetable</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="controls">
+    <div class="seg" id="zoneSeg" role="group" aria-label="Time zone">
+      <button data-z="auto">Auto</button><button data-z="UK">UK</button><button data-z="JP">Japan</button>
+    </div>
+    <button id="prev" aria-label="Previous week">&larr;</button>
+    <div class="range" id="range"></div>
+    <button id="nextw" aria-label="Next week">&rarr;</button>
+    <button id="today">Today</button>
+    <button id="vweek" class="on">Week</button>
+    <button id="vlist">List</button>
+    <button id="loadbtn" title="Load a different .ics file">Load .ics</button>
+    <input type="file" id="file" accept=".ics,text/calendar" hidden>
+  </div>
+</header>
+<div class="sub" id="zoneNote"></div>
+<main>
+  <div id="loader" hidden>
+    <b>Couldn't load <code>timetable.ics</code> automatically.</b>
+    <div class="sub" style="margin:6px 0 12px">Opening this page straight from a folder blocks that. Choose your downloaded MyTimetable .ics file, or host the site (e.g. GitHub Pages).</div>
+    <button id="pick">Choose .ics file…</button>
+  </div>
+  <div id="next"></div>
+  <div id="warn" hidden></div>
+  <div class="legend">
+    <span><i class="sw" style="background:hsl(210 70% 80%)"></i>Class</span>
+    <span><i class="sw" style="background:hsl(210 75% 94%);border:1px dashed rgba(0,0,0,.3);border-left:4px dashed hsl(210 55% 45%)"></i>Revision (dashed)</span>
+    <span><i class="sw" style="background:#ffe08a;border-left-color:#b07d00"></i>Sport</span>
+    <span><i class="sw" style="background:#ffd3b8;border-left-color:#c2612a"></i>Lunch</span>
+    <span><i class="sw" style="background:#f9c6dd;border-left-color:#c2306b"></i>Call</span>
+    <span><i class="sw" style="border:1px dashed var(--muted)"></i>Free period</span>
+    <label><input type="checkbox" id="showFree" checked> show free periods</label>
+    <label><input type="checkbox" id="showRev" checked> show revision</label>
+  </div>
+  <div class="sub" id="stats" style="margin-bottom:10px"></div>
+  <div id="view"></div>
+</main>
+<footer>Your .ics holds UK times. The Japan view converts them (Japan is UTC+9 all year, the UK moves between GMT and BST), so the call lands at 00:00 in Japan every day. In Japan view, columns are still your UK study days; “+1” means after midnight in Japan.</footer>
+
+<script>
+//<planner>
+// ---------------------------------------------------------------- time helpers
+// "Wall" values are milliseconds computed as if a local clock reading were UTC. UK wall = UK clock time.
+const H = 36e5, SLOT = 18e5, DAY = 864e5;
+const DAY_START = 9, DAY_END = 17;                    // weekday study/class day: 09:00-17:00 (UK)
+const SPORT_DAY = 2, SPORT_START = [13, 0], SPORT_END = [15, 30];   // Wednesday 13:00-15:30
+const LUNCH_STARTS = [[12,0],[12,30],[13,0],[11,30],[13,30],[11,0],[14,0]];   // 1h lunch, in order of preference
+const CALL_SLOTS = 3;                                 // 1.5 hours
+const JST_MIDNIGHT_UTC_HOUR = 15;                     // 00:00 in Japan (UTC+9, no DST) = 15:00 UTC
+const REVISION_PER_HOUR = 2;                          // hours of revision per timetabled hour
+const BEFORE_TYPES = ["tutorial", "seminar", "workshop", "problem class", "test"];   // revision must finish BEFORE these
+
+const W = (y, m, d, h = 0, mi = 0) => Date.UTC(y, m, d, h, mi);
+const dayFloor = w => Math.floor(w / DAY) * DAY;
+const wd = w => (new Date(w).getUTCDay() + 6) % 7;    // Monday = 0
+
+function lastSunday(year, month1) {                   // month1: 3 or 10 (both have 31 days)
+  const base = Date.UTC(year, month1 - 1, 31);
+  return base - new Date(base).getUTCDay() * DAY;
+}
+function ukOffsetUtc(utc) {                           // +1h during BST (last Sun Mar 01:00 UTC -> last Sun Oct 01:00 UTC)
+  const y = new Date(utc).getUTCFullYear();
+  return (utc >= lastSunday(y, 3) + H && utc < lastSunday(y, 10) + H) ? 1 : 0;
+}
+const wallToUtc = w => w - ukOffsetUtc(w - H) * H;    // UK wall -> real instant
+const utcToUkWall = u => u + ukOffsetUtc(u) * H;
+const herMidnightUk = day => { const u = day + JST_MIDNIGHT_UTC_HOUR * H; return u + ukOffsetUtc(u) * H; };
+
+// ---------------------------------------------------------------- ICS parsing
+function unfold(text) {
+  const lines = [];
+  for (const raw of text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")) {
+    if ((raw[0] === " " || raw[0] === "\t") && lines.length) lines[lines.length - 1] += raw.slice(1);
+    else lines.push(raw);
+  }
+  return lines;
+}
+const unescapeIcs = v => v.replace(/\\n/g, "\n").replace(/\\N/g, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
+function parseDt(value) {
+  const m = /^(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)(Z?)$/.exec(value.trim());
+  if (!m) throw new Error("unsupported date " + value);
+  const w = W(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  return m[7] ? utcToUkWall(w) : w;                   // a trailing Z means UTC; convert to UK clock time
+}
+function makeEvent(raw) {
+  const summary = unescapeIcs(raw.SUMMARY || "");
+  let code = "", rest = summary;
+  const i = summary.indexOf(": ");
+  if (i >= 0 && summary.slice(i + 2)) { code = summary.slice(0, i); rest = summary.slice(i + 2); }
+  let title = rest, kind = "";
+  const j = rest.lastIndexOf(" - ");
+  if (j >= 0) { title = rest.slice(0, j); kind = rest.slice(j + 3); }
+  return { code: code.trim(), title: title.trim(), type: kind.trim(), location: unescapeIcs(raw.LOCATION || "").trim(),
+           sw: parseDt(raw.DTSTART), ew: parseDt(raw.DTEND) };
+}
+function parseIcs(text) {
+  const events = []; let cur = null;
+  for (const line of unfold(text)) {
+    if (line === "BEGIN:VEVENT") cur = {};
+    else if (line === "END:VEVENT") {
+      if (cur && cur.DTSTART && cur.DTEND) { try { events.push(makeEvent(cur)); } catch (e) { /* skip all-day / odd events */ } }
+      cur = null;
+    } else if (cur && line.includes(":")) {
+      const k = line.indexOf(":");
+      cur[line.slice(0, k).split(";")[0].toUpperCase()] = line.slice(k + 1);
+    }
+  }
+  return events.sort((a, b) => a.sw - b.sw);
+}
+
+// ---------------------------------------------------------------- study planner
+const isBeforeType = kind => BEFORE_TYPES.some(t => kind.toLowerCase().includes(t));
+const daySlots = d => Array.from({ length: (DAY_END - DAY_START) * 2 }, (_, i) => d + DAY_START * H + i * SLOT);
+const dayRange = (a, b) => { const r = []; for (let d = a; d <= b; d += DAY) r.push(d); return r; };
+
+function buildPlan(classes) {
+  const sessions = classes.map(c => ({ ...c, s: c.sw, e: c.ew, hours: (c.ew - c.sw) / H }));
+  if (!sessions.length) return { events: [], warnings: [] };
+
+  const busy = new Set();                              // occupied 30-min slots (class, sport, lunch, call, revision)
+  for (const x of sessions) for (let t = x.s; t < x.e; t += SLOT) busy.add(t);
+
+  const firstDay = dayFloor(Math.min(...sessions.map(x => x.s)));
+  const lastDay = dayFloor(Math.max(...sessions.map(x => x.e)));
+  const firstMonday = firstDay - wd(firstDay) * DAY;
+  const lastSun = lastDay + (6 - wd(lastDay) + 14) * DAY;   // revision may run up to 2 weeks past the last class
+
+  // Wednesday sport (a class wins if they clash)
+  const sport = [];
+  for (const d of dayRange(firstMonday, lastSun)) {
+    if (wd(d) !== SPORT_DAY) continue;
+    const a = d + SPORT_START[0] * H + SPORT_START[1] * 6e4, b = d + SPORT_END[0] * H + SPORT_END[1] * 6e4;
+    let run = null;
+    for (let t = a; t < b; t += SLOT) {
+      if (busy.has(t)) { if (run !== null) { sport.push([run, t]); run = null; } }
+      else { if (run === null) run = t; busy.add(t); }
+    }
+    if (run !== null) sport.push([run, b]);
+  }
+
+  // 1-hour lunch every weekday, reserved BEFORE revision so it takes priority
+  const lunch = [];
+  for (const d of dayRange(firstMonday - 7 * DAY, lastSun)) {
+    if (wd(d) >= 5) continue;
+    for (const [h, m] of LUNCH_STARTS) {
+      const a = d + h * H + m * 6e4;
+      if (!busy.has(a) && !busy.has(a + SLOT)) { busy.add(a); busy.add(a + SLOT); lunch.push([a, a + 2 * SLOT]); break; }
+    }
+  }
+
+  // 1.5h call at midnight in Japan (15:00 UK in winter, 16:00 in summer); slides later (never earlier) if a class is in the way
+  const calls = [];
+  for (const d of dayRange(firstMonday - 7 * DAY, lastSun)) {
+    if (wd(d) >= 5) continue;
+    const ideal = herMidnightUk(d);
+    for (let k = 0; k < 12; k++) {
+      const a = ideal + k * SLOT, run = Array.from({ length: CALL_SLOTS }, (_, j) => a + j * SLOT);
+      if (run.every(t => !busy.has(t))) { run.forEach(t => busy.add(t)); calls.push([a, a + CALL_SLOTS * SLOT, k]); break; }
+    }
+  }
+
+  // revision tasks
+  const tasks = [];
+  for (const x of sessions) {
+    const need = Math.round(x.hours * REVISION_PER_HOUR * 2);   // 30-min slots
+    if (need <= 0) continue;
+    const before = isBeforeType(x.type);
+    tasks.push({ sess: x, need, before, label: before ? "Seminar/Tutorial revision" : "Lecture revision" });
+  }
+  const weekdaySlots = d => daySlots(d).filter(t => !busy.has(t));
+
+  function pick(task) {
+    const x = task.sess;
+    let wk, we;
+    if (task.before) {
+      let lo = x.s - 9 * DAY; const hi = x.s;
+      lo = Math.max(lo, firstMonday - 7 * DAY);
+      const days = dayRange(dayFloor(lo), dayFloor(hi));
+      wk = days.filter(d => wd(d) < 5).flatMap(weekdaySlots).filter(t => lo <= t && t + SLOT <= hi);
+      we = days.filter(d => wd(d) >= 5).flatMap(daySlots).filter(t => !busy.has(t) && lo <= t && t + SLOT <= hi);
+      wk.sort((a, b) => b - a);                         // as late as possible, but before the session
+    } else {
+      const lo = x.e, hi = x.e + 14 * DAY;
+      const days = dayRange(dayFloor(lo), dayFloor(hi));
+      wk = days.filter(d => wd(d) < 5).flatMap(weekdaySlots).filter(t => t >= lo);
+      we = days.filter(d => wd(d) >= 5).flatMap(daySlots).filter(t => !busy.has(t) && t >= lo);
+      wk.sort((a, b) => a - b);                         // soonest after the lecture
+    }
+    // weekdays first; Saturday before Sunday for the unavoidable overflow
+    we.sort((a, b) => ((wd(a) === 6) - (wd(b) === 6)) || (task.before ? b - a : a - b));
+    return wk.concat(we);
+  }
+
+  const placed = new Map(), warnings = [];
+  const order = tasks.map((_, i) => i).sort((i, j) =>
+    ((tasks[i].before ? 0 : 1) - (tasks[j].before ? 0 : 1)) || (tasks[i].sess.s - tasks[j].sess.s));
+  for (const i of order) {
+    const t = tasks[i];
+    const chosen = pick(t).filter(c => !busy.has(c)).slice(0, t.need);
+    for (const c of chosen) { busy.add(c); placed.set(c, i); }
+    if (chosen.length < t.need) warnings.push({ code: t.sess.code, type: t.sess.type, forW: t.sess.s, got: chosen.length / 2, need: t.need / 2 });
+  }
+
+  const out = classes.map(c => ({ ...c, kind: "class" }));
+  const byTask = new Map();
+  for (const [slot, i] of placed) { if (!byTask.has(i)) byTask.set(i, []); byTask.get(i).push(slot); }
+  for (const [i, slots] of byTask) {
+    slots.sort((a, b) => a - b);
+    const t = tasks[i], x = t.sess, runs = [];
+    let start = slots[0], prev = slots[0];
+    for (const sl of slots.slice(1)) { if (sl - prev === SLOT) prev = sl; else { runs.push([start, prev + SLOT]); start = prev = sl; } }
+    runs.push([start, prev + SLOT]);
+    for (const [a, b] of runs)
+      out.push({ kind: "revision", code: x.code, title: x.title, type: t.label, forType: x.type, forW: x.s, location: "", sw: a, ew: b });
+  }
+
+  // only weeks that actually contain classes or revision get sport / lunch / call / free periods
+  const weekOf = w => dayFloor(w) - wd(w) * DAY;
+  const active = new Set(out.map(e => weekOf(e.sw)));
+  const simple = (kind, code, title, type, extra = {}) => ({ kind, code, title, type, location: "", ...extra });
+  for (const [a, b] of sport) if (active.has(weekOf(a))) out.push(simple("sport", "SPORT", "Sports", "Sport", { sw: a, ew: b }));
+  for (const [a, b] of lunch) if (active.has(weekOf(a))) out.push(simple("lunch", "LUNCH", "Lunch", "Lunch", { sw: a, ew: b }));
+  for (const [a, b, k] of calls) if (active.has(weekOf(a))) out.push(simple("call", "CALL", "Call", "Call", { sw: a, ew: b, delay: k }));
+
+  // free periods: remaining weekday slots in active weeks
+  for (const d of dayRange(firstMonday - 7 * DAY, lastSun)) {
+    if (wd(d) >= 5 || !active.has(d - wd(d) * DAY)) continue;
+    let run = null;
+    for (const t of daySlots(d)) {
+      if (busy.has(t)) { if (run !== null) { out.push(simple("free", "FREE", "Free period", "Free period", { sw: run, ew: t })); run = null; } }
+      else if (run === null) run = t;
+    }
+    if (run !== null) out.push(simple("free", "FREE", "Free period", "Free period", { sw: run, ew: d + DAY_END * H }));
+  }
+
+  out.sort((a, b) => (a.sw - b.sw) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
+  for (const e of out) { e.s = wallToUtc(e.sw); e.e = wallToUtc(e.ew); if (e.forW !== undefined) e.forS = wallToUtc(e.forW); }
+  return { events: out, warnings };
+}
+//</planner>
+
+// ---------------------------------------------------------------- display
+const START_H = 8, END_H = 18, PX = 56;
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const pad = n => String(n).padStart(2, "0");
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+let all = [], events = [], view = "week", zonePref = store.get("tz-pref") || "auto", detected = detect();
+let weekStart = mondayOf(utcToUkWall(Date.now()));
+
+function detect() {
+  let tz = "";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
+  const jp = /^(Asia\/Tokyo|Japan)$/.test(tz) || (!tz && new Date().getTimezoneOffset() === -540);
+  return { zone: jp ? "JP" : "UK", tz };
+}
+const zone = () => zonePref === "auto" ? detected.zone : zonePref;
+const inZone = utc => zone() === "JP" ? utc + 9 * H : utcToUkWall(utc);        // clock reading (as wall ms) in the chosen zone
+const jpWall = utc => utc + 9 * H;
+const hhmm = w => { const d = new Date(w); return pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()); };
+const fmtZ = utc => { const w = inZone(utc), d = new Date(w); return `${DOW[d.getUTCDay()]} ${pad(d.getUTCDate())} ${MON[d.getUTCMonth()]} ${hhmm(w)}`; };
+const dayMark = (w, refDay) => { const n = Math.round((dayFloor(w) - refDay) / DAY); return n ? `<span class="plus">${n > 0 ? "+" : ""}${n}</span>` : ""; };
+function timeText(ev, html = true) {
+  const a = inZone(ev.s), b = inZone(ev.e), ref = dayFloor(ev.sw);
+  const t = hhmm(a) + dayMarkT(a, ref) + "–" + hhmm(b) + dayMarkT(b, ref);
+  return html ? t.replace(/\{(.*?)\}/g, '<span class="plus">$1</span>') : t.replace(/\{(.*?)\}/g, " ($1)");
+}
+function dayMarkT(w, refDay) { const n = Math.round((dayFloor(w) - refDay) / DAY); return n ? `{${n > 0 ? "+" : ""}${n}}` : ""; }
+function detail(ev) {
+  if (ev.kind === "revision") return `for ${ev.forType} on ${fmtZ(ev.forS)}`;
+  if (ev.kind === "call") {
+    const other = zone() === "JP"
+      ? `${hhmm(utcToUkWall(ev.s))}–${hhmm(utcToUkWall(ev.e))} UK`
+      : `${hhmm(jpWall(ev.s))}–${hhmm(jpWall(ev.e))} in Japan`;
+    return other + (ev.delay ? ` (delayed ${ev.delay / 2}h by a class)` : "");
+  }
+  return ev.location || "";
+}
+function mondayOf(w) { const d = dayFloor(w); return d - wd(d) * DAY; }
+const fmtDayShort = d => { const x = new Date(d); return `${x.getUTCDate()} ${MON[x.getUTCMonth()]}`; };
+const fmtDayLong = d => { const x = new Date(d); return `${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][x.getUTCDay()]} ${x.getUTCDate()} ${["January","February","March","April","May","June","July","August","September","October","November","December"][x.getUTCMonth()]}`; };
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function hue(code) { let h = 0; for (const c of code) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+function colour(code, kind) { const h = hue(code); return kind === "revision" ? `hsl(${h} 75% 94%)` : `hsl(${h} 70% 80%)`; }
+const zoneName = (ukDay) => zone() === "JP" ? "Japan time (JST, UTC+9)" : (ukOffsetUtc(ukDay + 12 * H) ? "UK time (BST, UTC+1)" : "UK time (GMT, UTC+0)");
+
+function setPlan(text) {
+  const { events: plan, warnings } = buildPlan(parseIcs(text));
+  all = plan;
+  const w = document.getElementById("warn");
+  w.hidden = !warnings.length;
+  w.innerHTML = warnings.length ? "<b>Couldn't fit all revision:</b><br>" + warnings.map(x =>
+    esc(`${x.code} ${x.type} on ${fmtZ(wallToUtc(x.forW))}: only ${x.got} of ${x.need} revision hours fit.`)).join("<br>") : "";
+  const cl = all.filter(e => e.kind === "class");
+  document.getElementById("sub").textContent = cl.length + " sessions · " + [...new Set(cl.map(e => e.code))].sort().join(", ");
+  document.getElementById("loader").hidden = true;
+  applyFilters();
+}
+function applyFilters() {
+  const free = document.getElementById("showFree").checked, rev = document.getElementById("showRev").checked;
+  events = all.filter(e => (free || e.kind !== "free") && (rev || e.kind !== "revision"));
+  render();
+}
+
+function renderNext() {
+  const now = Date.now(), el = document.getElementById("next");
+  const cur = events.find(e => e.kind === "class" && e.s <= now && now < e.e);
+  const nxt = events.find(e => e.kind === "class" && e.s > now);
+  const act = events.find(e => ["revision", "sport", "lunch", "call"].includes(e.kind) && e.s <= now && now < e.e);
+  const fr = events.find(e => e.kind === "free" && e.s <= now && now < e.e);
+  const untilT = e => hhmm(inZone(e.e));
+  let html = "";
+  if (cur) html += `<div>Now: <b>${esc(cur.code)} ${esc(cur.title)}</b> (${esc(cur.type)}) in ${esc(cur.location)} until ${untilT(cur)}</div>`;
+  if (!cur && act) html += `<div>Now: <b>${esc(act.type)}</b>${act.kind === "revision" ? ` · ${esc(act.code)} ${esc(act.title)} (${esc(detail(act))})` : ""} until ${untilT(act)}</div>`;
+  if (!cur && !act && fr) html += `<div>Now: <b>Free period</b> until ${untilT(fr)}</div>`;
+  if (nxt) html += `<div>Next: <b>${esc(nxt.code)} ${esc(nxt.title)}</b> (${esc(nxt.type)}) · ${fmtZ(nxt.s)} · ${esc(nxt.location)}</div>`;
+  if (!html) html = all.length ? "No upcoming sessions." : "Loading…";
+  el.innerHTML = html;
+}
+
+function layoutDay(list) {      // lay overlapping events side by side
+  list = [...list].sort((a, b) => a.sw - b.sw || b.ew - a.ew);
+  const out = []; let group = [], gEnd = 0;
+  const flush = () => {
+    const cols = [];
+    group.forEach(ev => {
+      let i = cols.findIndex(end => end <= ev.sw);
+      if (i < 0) { i = cols.length; cols.push(0); }
+      cols[i] = ev.ew; ev._col = i;
+    });
+    group.forEach(ev => { ev._cols = cols.length; out.push(ev); });
+    group = [];
+  };
+  list.forEach(ev => {
+    if (group.length && ev.sw >= gEnd) flush();
+    group.push(ev); gEnd = Math.max(gEnd, ev.ew);
+    if (group.length === 1) gEnd = ev.ew;
+  });
+  if (group.length) flush();
+  return out;
+}
+
+function renderWeek() {
+  const end = weekStart + 7 * DAY, todayUk = dayFloor(utcToUkWall(Date.now()));
+  const weekEvents = events.filter(e => e.sw >= weekStart && e.sw < end);
+  const days = [0, 1, 2, 3, 4].map(i => weekStart + i * DAY);
+  if (weekEvents.some(e => wd(e.sw) === 5)) days.push(weekStart + 5 * DAY);
+  if (weekEvents.some(e => wd(e.sw) === 6)) { if (days.length === 5) days.push(weekStart + 5 * DAY); days.push(weekStart + 6 * DAY); }
+  let sH = START_H, eH = END_H;
+  weekEvents.forEach(e => { const d0 = dayFloor(e.sw); sH = Math.min(sH, Math.floor((e.sw - d0) / H)); eH = Math.max(eH, Math.ceil((e.ew - d0) / H)); });
+  const Ht = (eH - sH) * PX;
+  const g = document.createElement("div");
+  g.className = "grid";
+  g.style.gridTemplateColumns = `56px repeat(${days.length}, 1fr)`;
+  g.innerHTML = `<div class="colhead"></div>` + days.map(d => {
+    const x = new Date(d);
+    return `<div class="colhead ${d === todayUk ? "today" : ""}">${DOW[x.getUTCDay()]}<small>${fmtDayShort(d)}</small></div>`;
+  }).join("");
+  // axis labels: UK study hours, shown on the chosen clock
+  const axis = Array.from({ length: eH - sH }, (_, i) => {
+    const a = inZone(wallToUtc(weekStart + (sH + i) * H));
+    return `<div class="hour" style="top:${i * PX}px">${hhmm(a)}${dayMark(a, weekStart)}</div>`;
+  }).join("");
+  const lines = Array.from({ length: eH - sH }, (_, i) => `<div class="hour" style="top:${i * PX}px"></div>`).join("");
+  const tc = document.createElement("div"); tc.className = "timecol"; tc.style.height = Ht + "px"; tc.innerHTML = axis; g.appendChild(tc);
+  days.forEach(d => {
+    const col = document.createElement("div");
+    col.className = "daycol" + (d === todayUk ? " today" : "");
+    col.style.height = Ht + "px";
+    col.innerHTML = lines;
+    layoutDay(weekEvents.filter(e => dayFloor(e.sw) === d)).forEach(ev => {
+      const top = ((ev.sw - d) / H - sH) * PX;
+      const h = Math.max(24, ((ev.ew - ev.sw) / H) * PX - 2);
+      const w = 100 / ev._cols;
+      const div = document.createElement("div");
+      div.className = "ev " + ev.kind;
+      div.style.cssText = `top:${top}px;height:${h}px;left:calc(${ev._col * w}% + 2px);width:calc(${w}% - 4px);background:${colour(ev.code, ev.kind)};${ev.kind === "revision" ? `border-left-color:hsl(${hue(ev.code)} 55% 45%)` : ""}`;
+      if (h < 44) div.classList.add("tiny");
+      div.title = `${ev.code} ${ev.title} (${ev.type})\n${timeText(ev, false)}\n${detail(ev)}`;
+      div.innerHTML = ["free", "sport", "lunch", "call"].includes(ev.kind)
+        ? `<b>${esc(ev.type)}</b><div class="t">${timeText(ev)}${detail(ev) ? " · " + esc(detail(ev)) : ""}</div>`
+        : `<b>${esc(ev.code)} · ${esc(ev.type)}</b> ${esc(ev.title)}<div class="t">${timeText(ev)} · ${esc(detail(ev))}</div>`;
+      col.appendChild(div);
+    });
+    g.appendChild(col);
+  });
+  const v = document.getElementById("view"); v.innerHTML = "";
+  v.appendChild(g);
+  if (!weekEvents.length) { const m = document.createElement("div"); m.className = "empty"; m.textContent = "Nothing scheduled this week."; v.appendChild(m); }
+}
+
+function renderList() {
+  const end = weekStart + 7 * DAY, todayUk = dayFloor(utcToUkWall(Date.now()));
+  const list = events.filter(e => e.sw >= weekStart && e.sw < end);
+  const v = document.getElementById("view"); v.innerHTML = "";
+  if (!list.length) { v.innerHTML = `<div class="empty">Nothing scheduled this week.</div>`; return; }
+  for (let i = 0; i < 7; i++) {
+    const d = weekStart + i * DAY, items = list.filter(e => dayFloor(e.sw) === d);
+    if (!items.length) continue;
+    const box = document.createElement("div");
+    box.className = "list-day" + (d === todayUk ? " today" : "");
+    box.innerHTML = `<h3>${fmtDayLong(d)}${zone() === "JP" ? ' <span class="sub">(UK study day)</span>' : ""}</h3>` + items.map(e =>
+      ["free", "sport", "lunch", "call"].includes(e.kind)
+        ? `<div class="row"><div class="time">${timeText(e)}</div><div><b>${esc(e.type)}</b>${detail(e) ? `<div class="sub">${esc(detail(e))}</div>` : ""}</div></div>`
+        : `<div class="row"><div class="time">${timeText(e)}</div><div><b>${esc(e.code)} ${esc(e.title)}</b><span class="pill" style="background:${colour(e.code, e.kind)}">${esc(e.type)}</span><div class="sub">${esc(detail(e))}</div></div></div>`
+    ).join("");
+    v.appendChild(box);
+  }
+}
+
+function renderStats() {
+  const end = weekStart + 7 * DAY, wk = all.filter(e => e.sw >= weekStart && e.sw < end);
+  const hrs = f => wk.filter(f).reduce((s, e) => s + (e.ew - e.sw) / H, 0);
+  const cls = hrs(e => e.kind === "class"), rev = hrs(e => e.kind === "revision"), wkend = hrs(e => e.kind === "revision" && wd(e.sw) >= 5);
+  document.getElementById("stats").textContent = wk.length
+    ? `This week: ${cls}h of classes · ${rev}h of revision${wkend ? ` (${wkend}h of it on the weekend)` : " (none on the weekend)"}`
+    : "";
+}
+
+function render() {
+  const end = weekStart + 6 * DAY;
+  document.getElementById("range").textContent = `${fmtDayShort(weekStart)} – ${fmtDayShort(end)} ${new Date(end).getUTCFullYear()}`;
+  document.getElementById("vweek").classList.toggle("on", view === "week");
+  document.getElementById("vlist").classList.toggle("on", view === "list");
+  document.querySelectorAll("#zoneSeg button").forEach(b => b.classList.toggle("on", b.dataset.z === zonePref));
+  const auto = zonePref === "auto";
+  document.getElementById("zoneNote").textContent =
+    `Showing ${zoneName(weekStart)}` + (auto ? ` — chosen automatically from your device's time zone${detected.tz ? " (" + detected.tz + ")" : ""}. Use the buttons to switch.` : ".");
+  renderNext(); renderStats();
+  view === "week" ? renderWeek() : renderList();
+}
+
+// ---------------------------------------------------------------- wiring
+const $ = id => document.getElementById(id);
+$("prev").onclick = () => { weekStart -= 7 * DAY; render(); };
+$("nextw").onclick = () => { weekStart += 7 * DAY; render(); };
+$("today").onclick = () => { weekStart = mondayOf(utcToUkWall(Date.now())); render(); };
+$("vweek").onclick = () => { view = "week"; render(); };
+$("vlist").onclick = () => { view = "list"; render(); };
+$("showFree").onchange = applyFilters;
+$("showRev").onchange = applyFilters;
+document.querySelectorAll("#zoneSeg button").forEach(b => b.onclick = () => { zonePref = b.dataset.z; store.set("tz-pref", zonePref); render(); });
+$("loadbtn").onclick = $("pick").onclick = () => $("file").click();
+$("file").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const text = await f.text(); store.set("ics-text", text); setPlan(text);
+};
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowLeft") $("prev").click();
+  if (e.key === "ArrowRight") $("nextw").click();
+});
+
+async function load() {
+  render();
+  try {
+    const r = await fetch("timetable.ics", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    setPlan(await r.text());
+  } catch (err) {
+    const saved = store.get("ics-text");
+    if (saved) { try { setPlan(saved); return; } catch (e2) {} }
+    $("loader").hidden = false; renderNext();
+  }
+}
+load();
+setInterval(renderNext, 60000);
+</script>
+</body>
+</html>
