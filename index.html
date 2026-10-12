@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#68246d">
+<meta name="color-scheme" content="light only">
 <title>My Timetable</title>
 <style>
 :root{
+  color-scheme:light;
   --bg:#f6f5f2; --panel:#fff; --ink:#1d1d1f; --muted:#6b6b72; --line:#e4e2dd;
   --today:#fff8e6; --accent:#68246d;
 }
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#131316; --panel:#1c1c21; --ink:#ececf0; --muted:#9a9aa5; --line:#2c2c34; --today:#2a2616; --accent:#c78bd0; }
-}
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+.ev,.row,button{-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;max-width:1200px;margin:0 auto}
 h1{font-size:20px;margin:0}
@@ -63,6 +63,18 @@ main{max-width:1200px;margin:0 auto;padding:0 20px 40px}
 .empty{padding:30px;text-align:center;color:var(--muted)}
 .legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;color:var(--muted);margin:0 0 12px}
 .legend label{cursor:pointer;display:flex;gap:5px;align-items:center}
+.ev,.row[data-i]{cursor:pointer}
+.ev:hover,.ev:focus-visible{filter:brightness(.96);outline:2px solid var(--accent);outline-offset:-2px}
+.row[data-i]:hover,.row[data-i]:focus-visible{background:rgba(104,36,109,.06);outline:none}
+.modal{position:fixed;inset:0;background:rgba(20,20,25,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal[hidden]{display:none}
+.sheet{background:#fff;border-radius:16px;max-width:420px;width:100%;padding:18px 18px 16px;position:relative;max-height:88vh;overflow:auto;border-top:8px solid var(--accent);box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.sheet h2{margin:0 34px 2px 0;font-size:18px}
+.sheet .msub{color:var(--muted);margin-bottom:12px}
+.sheet dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px}
+.sheet dt{color:var(--muted);font-size:13px}
+.sheet dd{margin:0;font-weight:500}
+#mClose{position:absolute;top:8px;right:8px;width:38px;height:38px;border-radius:50%;padding:0;font-size:22px;line-height:1}
 .sw{display:inline-block;width:14px;height:14px;border-radius:4px;border-left:4px solid rgba(0,0,0,.35);vertical-align:-3px;margin-right:4px}
 #warn{background:#fdecea;color:#7a1d12;border:1px solid #f3b8b0;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px}
 #loader{background:var(--panel);border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;margin-bottom:16px}
@@ -73,6 +85,8 @@ main{max-width:1200px;margin:0 auto;padding:0 20px 40px}
 button{min-height:38px;touch-action:manipulation}
 #view{touch-action:pan-y}
 @media (max-width:700px){
+  .modal{align-items:flex-end;padding:0}
+  .sheet{max-width:none;border-radius:16px 16px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom))}
   body{font-size:14px}
   header{padding:12px 14px 8px;gap:8px}
   h1{font-size:18px}
@@ -90,9 +104,7 @@ button{min-height:38px;touch-action:manipulation}
   .row .time{width:auto}
   .list-day h3{padding:10px 12px}
   .colhead{font-size:14px}
-  footer{padding:0 14px 24px}
 }
-footer{max-width:1200px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
@@ -138,7 +150,13 @@ footer{max-width:1200px;margin:0 auto;padding:0 20px 30px;color:var(--muted);fon
   <div class="sub" id="stats" style="margin-bottom:10px"></div>
   <div id="view"></div>
 </main>
-<footer>Japan adjusted Times from GMT</footer>
+
+<div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="sheet">
+    <button id="mClose" aria-label="Close">&times;</button>
+    <div id="mBody"></div>
+  </div>
+</div>
 
 <script>
 //<planner>
@@ -314,7 +332,7 @@ function buildPlan(classes) {
     for (const sl of slots.slice(1)) { if (sl - prev === SLOT) prev = sl; else { runs.push([start, prev + SLOT]); start = prev = sl; } }
     runs.push([start, prev + SLOT]);
     for (const [a, b] of runs)
-      out.push({ kind: "revision", code: x.code, title: x.title, type: t.label, forType: x.type, forW: x.s, location: "", sw: a, ew: b });
+      out.push({ kind: "revision", code: x.code, title: x.title, type: t.label, forType: x.type, forW: x.s, forLoc: x.location, location: "", sw: a, ew: b });
   }
 
   // only weeks that actually contain classes or revision get sport / lunch / call / free periods
@@ -352,7 +370,8 @@ const store = {
 };
 const isPhone = () => window.matchMedia && window.matchMedia("(max-width: 700px)").matches;
 const todayUk = () => dayFloor(utcToUkWall(Date.now()));
-let all = [], events = [], view = isPhone() ? "day" : "week", zonePref = store.get("tz-pref") || "auto", detected = detect();
+const savedView = store.get("tt-view");
+let all = [], events = [], view = ["day", "week", "list"].includes(savedView) ? savedView : (isPhone() ? "day" : "week"), zonePref = store.get("tz-pref") || "auto", detected = detect();
 let weekStart = mondayOf(utcToUkWall(Date.now())), dayStart = todayUk();
 
 function detect() {
@@ -405,6 +424,7 @@ function setPlan(text) {
 }
 function applyFilters() {
   const free = document.getElementById("showFree").checked, rev = document.getElementById("showRev").checked;
+  store.set("tt-free", free ? "1" : "0"); store.set("tt-rev", rev ? "1" : "0");
   events = all.filter(e => (free || e.kind !== "free") && (rev || e.kind !== "revision"));
   render();
 }
@@ -489,7 +509,8 @@ function renderWeek() {
       div.className = "ev " + ev.kind;
       div.style.cssText = `top:${top}px;height:${h}px;left:calc(${ev._col * w}% + 2px);width:calc(${w}% - 4px);background:${colour(ev.code, ev.kind)};${ev.kind === "revision" ? `border-left-color:hsl(${hue(ev.code)} 55% 45%)` : ""}`;
       if (h < 44) div.classList.add("tiny");
-      div.title = `${ev.code} ${ev.title} (${ev.type})\n${timeText(ev, false)}\n${detail(ev)}`;
+      div.dataset.i = events.indexOf(ev); div.tabIndex = 0; div.setAttribute("role", "button");
+      div.setAttribute("aria-label", `${ev.code !== ev.type.toUpperCase() ? ev.code + " " : ""}${ev.type}, ${timeText(ev, false)}. Tap for details`);
       div.innerHTML = ["free", "sport", "lunch", "call"].includes(ev.kind)
         ? `<b>${esc(ev.type)}</b><div class="t">${timeText(ev)}${detail(ev) ? " · " + esc(detail(ev)) : ""}</div>`
         : `<b>${esc(ev.code)} · ${esc(ev.type)}</b> ${esc(ev.title)}<div class="t">${timeText(ev)} · ${esc(detail(ev))}</div>`;
@@ -515,8 +536,8 @@ function renderList() {
     box.className = "list-day" + (d === today ? " today" : "");
     box.innerHTML = `<h3>${fmtDayLong(d)}${zone() === "JP" ? ' <span class="sub">(UK study day)</span>' : ""}</h3>` + items.map(e =>
       ["free", "sport", "lunch", "call"].includes(e.kind)
-        ? `<div class="row"><div class="time">${timeText(e)}</div><div><b>${esc(e.type)}</b>${detail(e) ? `<div class="sub">${esc(detail(e))}</div>` : ""}</div></div>`
-        : `<div class="row"><div class="time">${timeText(e)}</div><div><b>${esc(e.code)} ${esc(e.title)}</b><span class="pill" style="background:${colour(e.code, e.kind)}">${esc(e.type)}</span><div class="sub">${esc(detail(e))}</div></div></div>`
+        ? `<div class="row" data-i="${events.indexOf(e)}" tabindex="0" role="button"><div class="time">${timeText(e)}</div><div><b>${esc(e.type)}</b>${detail(e) ? `<div class="sub">${esc(detail(e))}</div>` : ""}</div></div>`
+        : `<div class="row" data-i="${events.indexOf(e)}" tabindex="0" role="button"><div class="time">${timeText(e)}</div><div><b>${esc(e.code)} ${esc(e.title)}</b><span class="pill" style="background:${colour(e.code, e.kind)}">${esc(e.type)}</span><div class="sub">${esc(detail(e))}</div></div></div>`
     ).join("");
     v.appendChild(box);
   }
@@ -549,6 +570,51 @@ function render() {
 
 // ---------------------------------------------------------------- wiring
 const $ = id => document.getElementById(id);
+// ---------------------------------------------------------------- details panel
+const zlabel = { UK: "UK time", JP: "Japan time" };
+const zWall = (u, z) => z === "JP" ? u + 9 * H : utcToUkWall(u);
+function zText(ev, z) {
+  const a = zWall(ev.s, z), b = zWall(ev.e, z), ref = dayFloor(ev.sw);
+  return (hhmm(a) + dayMarkT(a, ref) + "–" + hhmm(b) + dayMarkT(b, ref)).replace(/\{(.*?)\}/g, " ($1)");
+}
+const KIND_COLOUR = { sport: "#ffe08a", lunch: "#ffd3b8", call: "#f9c6dd", free: "#c9c7c1" };
+let lastFocus = null;
+function openInfo(ev) {
+  if (!ev) return;
+  const z = zone(), other = z === "JP" ? "UK" : "JP", hrs = (ev.ew - ev.sw) / H;
+  const isClass = ev.kind === "class", isRev = ev.kind === "revision";
+  const rows = [], add = (k, v) => rows.push(`<dt>${k}</dt><dd>${v}</dd>`);
+  const w = zWall(ev.s, z), dt = new Date(dayFloor(w));
+  add("Date", `${fmtDayLong(dayFloor(w))} ${dt.getUTCFullYear()}`);
+  add(zlabel[z], esc(zText(ev, z)));
+  add(zlabel[other], esc(zText(ev, other)));
+  add("Length", `${hrs} hour${hrs === 1 ? "" : "s"}`);
+  if (isClass) add("Room", esc(ev.location || "Not listed"));
+  if (isRev) {
+    add("Revising for", esc(`${ev.forType} · ${fmtZ(ev.forS)}`));
+    add("Session room", esc(ev.forLoc || "Not listed"));
+    add("Timing", ev.type.startsWith("Seminar") ? "Finishes before the session starts" : "Done after the lecture");
+  }
+  if (ev.kind === "call") add("Timing", ev.delay ? `Moved ${ev.delay / 2}h later because of a class` : "Starts at midnight in Japan");
+  const title = isClass ? `${ev.code} · ${ev.type}` : ev.type;
+  const sub = (isClass || isRev) ? `${isRev ? ev.code + " · " : ""}${ev.title}` : "";
+  const colourBar = (isClass || isRev) ? `hsl(${hue(ev.code)} 55% 55%)` : (KIND_COLOUR[ev.kind] || "var(--accent)");
+  $("mBody").innerHTML = `<h2 id="mTitle">${esc(title)}</h2>${sub ? `<div class="msub">${esc(sub)}</div>` : ""}<dl>${rows.join("")}</dl>`;
+  document.querySelector("#modal .sheet").style.borderTopColor = colourBar;
+  lastFocus = document.activeElement;
+  $("modal").hidden = false;
+  $("mClose").focus();
+}
+function closeInfo() { $("modal").hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+$("view").addEventListener("click", e => { const t = e.target.closest("[data-i]"); if (t) openInfo(events[+t.dataset.i]); });
+$("view").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const t = e.target.closest("[data-i]"); if (t) { e.preventDefault(); openInfo(events[+t.dataset.i]); }
+});
+$("mClose").onclick = closeInfo;
+$("modal").addEventListener("click", e => { if (e.target === $("modal")) closeInfo(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("modal").hidden) closeInfo(); });
+
 function step(dir) {
   if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
   else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
@@ -556,7 +622,7 @@ function step(dir) {
 }
 function setView(v) {
   if (v === "day" && view !== "day") { const t = todayUk(); dayStart = (t >= weekStart && t < weekStart + 7 * DAY) ? t : weekStart; }
-  view = v; render();
+  view = v; store.set("tt-view", v); render();
 }
 $("prev").onclick = () => step(-1);
 $("nextw").onclick = () => step(1);
@@ -572,6 +638,8 @@ $("view").addEventListener("touchend", e => {
   const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y; touch = null;
   if (Math.abs(dx) > 60 && Math.abs(dx) > 1.6 * Math.abs(dy)) step(dx < 0 ? 1 : -1);
 }, { passive: true });
+$("showFree").checked = store.get("tt-free") !== "0";
+$("showRev").checked = store.get("tt-rev") !== "0";
 $("showFree").onchange = applyFilters;
 $("showRev").onchange = applyFilters;
 document.querySelectorAll("#zoneSeg button").forEach(b => b.onclick = () => { zonePref = b.dataset.z; store.set("tz-pref", zonePref); render(); });
