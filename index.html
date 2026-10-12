@@ -2,13 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#68246d">
 <meta name="color-scheme" content="light only">
 <title>My Timetable</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
+html, body {
+  touch-action: manipulation;
+}
 #splash {
   position: fixed;
   inset: 0;
@@ -219,9 +222,9 @@ const H = 36e5, SLOT = 18e5, DAY = 864e5;
 const DAY_START = 9, DAY_END = 17;                    // weekday study/class day: 09:00-17:00 (UK)
 const SPORT_DAY = 2, SPORT_START = [13, 0], SPORT_END = [15, 30];   // Wednesday 13:00-15:30
 const LUNCH_STARTS = [[12,0],[12,30],[13,0],[11,30],[13,30],[11,0],[14,0]];   // 1h lunch, in order of preference
-const CALL_SLOTS = 3;                                 // 1.5 hours
-const JST_MIDNIGHT_UTC_HOUR = 15;                     // 00:00 in Japan (UTC+9, no DST) = 15:00 UTC
-const REVISION_PER_HOUR = 2;                          // hours of revision per timetabled hour
+const CALL_SLOTS = 3;                                  // 1.5 hours
+const JST_MIDNIGHT_UTC_HOUR = 15;                      // 00:00 in Japan (UTC+9, no DST) = 15:00 UTC
+const REVISION_PER_HOUR = 2;                           // hours of revision per timetabled hour
 const BEFORE_TYPES = ["tutorial", "seminar", "workshop", "problem class", "test"];   // revision must finish BEFORE these
 
 const W = (y, m, d, h = 0, mi = 0) => Date.UTC(y, m, d, h, mi);
@@ -492,7 +495,7 @@ function renderNext() {
   const until = e => `until ${hhmm(inZone(e.e))}`;
   let nowHtml;
   if (cur) nowHtml = `<b>${esc(cur.code)} ${esc(cur.title)}</b> · ${esc(cur.type)}<span class="when">${cur.location ? "in " + esc(cur.location) + " · " : ""}${until(cur)}</span>`;
-  else if (act) nowHtml = `<b>${esc(act.type)}</b>${act.kind === "revision" ? ` · ${esc(act.code)} ${esc(act.title)}` : ""}<span class="when">${esc(detail(act))}${detail(act) ? " · " : ""}${until(act)}</span>`;
+  else if (act) nowHtml = `<b>${esc(act.type)}</b>${act.kind === "revision" ? ` · ${esc(act.code)}${esc(act.title)}` : ""}<span class="when">${esc(detail(act))}${detail(act) ? " · " : ""}${until(act)}</span>`;
   else if (fr) nowHtml = `<b>Free period</b><span class="when">${until(fr)}</span>`;
   else nowHtml = `<b>Nothing scheduled</b><span class="when">Outside your timetable hours</span>`;
   const nextHtml = nxt
@@ -826,6 +829,18 @@ async function load() {
 load();
 let lastHour = Math.floor(Date.now() / H);
 setInterval(() => { renderNext(); const h = Math.floor(Date.now() / H); if (h !== lastHour && !touch && !sliding) { lastHour = h; render(); } }, 60000);
+
+// Prevent pinch-to-zoom on iOS Safari
+document.addEventListener('gesturestart', function (e) {
+  e.preventDefault();
+});
+
+// Prevent Ctrl / Cmd + wheel zoom on trackpads and desktop
+document.addEventListener('wheel', function (e) {
+  if (e.ctrlKey) {
+    e.preventDefault();
+  }
+}, { passive: false });
 </script>
 </body>
 </html>
