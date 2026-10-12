@@ -91,7 +91,13 @@ main{max-width:1200px;margin:0 auto;padding:0 20px 40px;overflow-x:hidden}
 .gridwrap .grid{min-width:680px}
 .gridwrap.day .grid{min-width:0}
 button{min-height:38px;touch-action:manipulation}
-#view{touch-action:pan-y}
+#view{overflow:hidden;touch-action:pan-y}
+#view.wk{touch-action:auto}
+html,body{overscroll-behavior-x:none}
+.track{display:flex;align-items:flex-start;width:300%;transform:translateX(-33.3333%)}
+.panel{flex:0 0 33.3333%;min-width:0}
+.panel.side{max-height:var(--h);overflow:hidden}
+.gridwrap.day{overflow-x:hidden}
 @media (max-width:700px){
   .modal{align-items:flex-end;padding:0}
   .sheet{max-width:none;border-radius:16px 16px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom))}
@@ -482,10 +488,11 @@ function layoutDay(list) {      // lay overlapping events side by side
   return out;
 }
 
-function renderWeek() {
+function buildGrid(anchor) {      // anchor = a day (day view) or a Monday (week view)
+  const weekStart = view === "day" ? mondayOf(anchor) : anchor;
   const end = weekStart + 7 * DAY, today = todayUk();
   let days;
-  if (view === "day") days = [dayStart];
+  if (view === "day") days = [anchor];
   else {
     const wk = events.filter(e => e.sw >= weekStart && e.sw < end);
     days = [0, 1, 2, 3, 4].map(i => weekStart + i * DAY);
@@ -538,17 +545,18 @@ function renderWeek() {
     }
     g.appendChild(col);
   });
-  const v = document.getElementById("view"); v.innerHTML = "";
+  const v = document.createElement("div");
   const wrap = document.createElement("div"); wrap.className = "gridwrap" + (view === "day" ? " day" : "");
   wrap.appendChild(g); v.appendChild(wrap);
   if (!weekEvents.length) { const m = document.createElement("div"); m.className = "empty"; m.textContent = view === "day" ? "Nothing scheduled — a day off." : "Nothing scheduled this week."; v.appendChild(m); }
+  return v;
 }
 
-function renderList() {
+function buildList(weekStart) {
   const end = weekStart + 7 * DAY, today = todayUk();
   const list = events.filter(e => e.sw >= weekStart && e.sw < end);
-  const v = document.getElementById("view"); v.innerHTML = "";
-  if (!list.length) { v.innerHTML = `<div class="empty">Nothing scheduled this week.</div>`; return; }
+  const v = document.createElement("div");
+  if (!list.length) { v.innerHTML = `<div class="empty">Nothing scheduled this week.</div>`; return v; }
   for (let i = 0; i < 7; i++) {
     const d = weekStart + i * DAY, items = list.filter(e => dayFloor(e.sw) === d);
     if (!items.length) continue;
@@ -561,6 +569,7 @@ function renderList() {
     ).join("");
     v.appendChild(box);
   }
+  return v;
 }
 
 function renderStats() {
@@ -585,7 +594,21 @@ function render() {
   document.getElementById("zoneNote").textContent =
     `Showing ${zoneName(view === "day" ? dayStart : weekStart)}` + (auto ? ` — chosen automatically from your device's time zone${detected.tz ? " (" + detected.tz + ")" : ""}. Use the buttons to switch.` : ".");
   renderNext(); renderStats();
-  view === "list" ? renderList() : renderWeek();
+  // three panels side by side (previous | current | next) so the neighbour is visible while swiping
+  const v = document.getElementById("view");
+  v.className = view === "week" ? "wk" : "";
+  v.innerHTML = "";
+  const unit = view === "day" ? DAY : 7 * DAY, anchor = view === "day" ? dayStart : weekStart;
+  const build = view === "list" ? buildList : buildGrid;
+  const track = document.createElement("div"); track.className = "track";
+  [-1, 0, 1].forEach(k => {
+    const p = document.createElement("div");
+    p.className = "panel" + (k ? " side" : "");
+    p.appendChild(build(anchor + k * unit));
+    track.appendChild(p);
+  });
+  v.appendChild(track);
+  track.style.setProperty("--h", track.children[1].offsetHeight + "px");
 }
 
 // ---------------------------------------------------------------- wiring
@@ -635,30 +658,33 @@ $("mClose").onclick = closeInfo;
 $("modal").addEventListener("click", e => { if (e.target === $("modal")) closeInfo(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("modal").hidden) closeInfo(); });
 
-// slide the old content out and the new content in, in the direction of travel
+// the track holds [previous | current | next]; sliding it reveals the neighbour, then we re-render centred on it
 let sliding = false;
-function slide(dir, change) {
-  const v = $("view");
-  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!v.animate || reduce || sliding) { change(); return; }
+const BASE = -100 / 3;                                   // % of track width that centres the middle panel
+const trackEl = () => $("view").firstElementChild;
+const pos = px => `translateX(calc(${BASE}% + ${px}px))`;
+const reduceMotion = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function commitSlide(dir, dx, ms) {
+  const tr = trackEl();
+  if (!tr || !tr.animate || reduceMotion()) { go(dir); return; }
   sliding = true;
-  const out = v.animate(
-    [{ transform: "none", opacity: 1 }, { transform: `translateX(${-dir * 40}px)`, opacity: 0 }],
-    { duration: 130, easing: "ease-in", fill: "forwards" });
-  out.finished.then(() => {
-    change();
-    out.cancel();
-    return v.animate(
-      [{ transform: `translateX(${dir * 40}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
-      { duration: 190, easing: "ease-out" }).finished;
-  }).catch(() => {}).finally(() => { sliding = false; });
+  tr.style.transform = "";
+  const a = tr.animate(
+    [{ transform: pos(dx) }, { transform: `translateX(${BASE - dir * 100 / 3}%)` }],
+    { duration: ms, easing: "ease-out", fill: "forwards" });
+  a.finished.then(() => { go(dir); a.cancel(); }).catch(() => {}).finally(() => { sliding = false; });
+}
+function snapBack(dx) {
+  const tr = trackEl(); if (!tr) return;
+  tr.style.transform = "";
+  if (tr.animate && dx) tr.animate([{ transform: pos(dx) }, { transform: pos(0) }], { duration: 200, easing: "ease-out" });
 }
 function go(dir) {
   if (view === "day") { dayStart += dir * DAY; weekStart = mondayOf(dayStart); }
   else { weekStart += dir * 7 * DAY; dayStart = weekStart + wd(dayStart) * DAY; }
   render();
 }
-function step(dir) { slide(dir, () => go(dir)); }
+function step(dir) { if (!sliding) commitSlide(dir, 0, 260); }
 function setView(v) {
   if (v === "day" && view !== "day") { const t = todayUk(); dayStart = (t >= weekStart && t < weekStart + 7 * DAY) ? t : weekStart; }
   view = v; store.set("tt-view", v); render();
@@ -670,51 +696,51 @@ $("vday").onclick = () => setView("day");
 $("vweek").onclick = () => setView("week");
 $("vlist").onclick = () => setView("list");
 // swipe left/right to change day (day view) or week (list view)
-// the content follows the finger; it only changes day/week if released past a threshold or flicked
+// the panels follow the finger and the neighbour is visible; it only changes if released past a threshold or flicked.
+// In week view the grid can scroll sideways, so a swipe only changes week from the very end of the scroll.
 let touch = null;
 const viewEl = $("view");
+const centerWrap = () => { const tr = trackEl(); return tr && tr.children[1].querySelector(".gridwrap"); };
 viewEl.addEventListener("touchstart", e => {
-  if (view === "week" || sliding || e.touches.length !== 1) { touch = null; return; }
+  if (sliding || e.touches.length !== 1) { touch = null; return; }
   const t = e.touches[0];
-  touch = { x: t.clientX, y: t.clientY, dx: 0, lock: null, t0: Date.now() };
+  touch = { x: t.clientX, y: t.clientY, dx: 0, lock: null, t0: Date.now(), canPrev: true, canNext: true, sl0: 0 };
+  if (view === "week") {
+    const gw = centerWrap();
+    if (gw) {
+      const max = gw.scrollWidth - gw.clientWidth;
+      touch.sl0 = gw.scrollLeft;
+      touch.canPrev = gw.scrollLeft <= 1;            // at the left end: dragging right goes to the previous week
+      touch.canNext = gw.scrollLeft >= max - 1;      // at the right end: dragging left goes to the next week
+    }
+  }
 }, { passive: true });
 viewEl.addEventListener("touchmove", e => {
   if (!touch) return;
-  const t = e.touches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+  const t = e.touches[0];
+  let dx = t.clientX - touch.x; const dy = t.clientY - touch.y;
   if (!touch.lock && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) touch.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
   if (touch.lock !== "x") return;
+  if (view === "week") {
+    const gw = centerWrap();
+    if (gw && Math.abs(gw.scrollLeft - touch.sl0) > 1) {      // the grid itself is scrolling: hand the gesture back to it
+      touch.lock = "n"; touch.dx = 0; snapBack(0); return;
+    }
+  }
+  if ((dx > 0 && !touch.canPrev) || (dx < 0 && !touch.canNext)) dx = 0;
   touch.dx = dx;
-  const W = viewEl.offsetWidth || 1;
-  viewEl.style.transform = `translateX(${dx}px)`;
-  viewEl.style.opacity = String(1 - Math.min(Math.abs(dx) / W, 1) * 0.5);
+  const tr = trackEl(); if (tr) tr.style.transform = pos(dx);
 }, { passive: true });
 function endSwipe() {
   const s = touch; touch = null;
-  if (!s || s.lock !== "x") return;
+  if (!s || s.lock !== "x" || !s.dx) return;
   const dx = s.dx, W = viewEl.offsetWidth || 1, dir = dx < 0 ? 1 : -1;
   const speed = Math.abs(dx) / Math.max(1, Date.now() - s.t0);          // px per ms
   const commit = Math.abs(dx) > W * 0.25 || (speed > 0.5 && Math.abs(dx) > 30);
-  const op = 1 - Math.min(Math.abs(dx) / W, 1) * 0.5;
-  viewEl.style.transform = ""; viewEl.style.opacity = "";
-  if (!commit) {                                                         // snap back
-    viewEl.animate([{ transform: `translateX(${dx}px)`, opacity: op }, { transform: "none", opacity: 1 }],
-      { duration: 200, easing: "ease-out" });
-    return;
-  }
-  sliding = true;
-  const out = viewEl.animate(
-    [{ transform: `translateX(${dx}px)`, opacity: op }, { transform: `translateX(${-dir * W}px)`, opacity: 0 }],
-    { duration: 160, easing: "ease-out", fill: "forwards" });
-  out.finished.then(() => {
-    go(dir);
-    out.cancel();
-    return viewEl.animate(
-      [{ transform: `translateX(${dir * W}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
-      { duration: 220, easing: "ease-out" }).finished;
-  }).catch(() => {}).finally(() => { sliding = false; });
+  if (commit) commitSlide(dir, dx, 200); else snapBack(dx);
 }
 viewEl.addEventListener("touchend", endSwipe, { passive: true });
-viewEl.addEventListener("touchcancel", endSwipe, { passive: true });
+viewEl.addEventListener("touchcancel", () => { const s = touch; touch = null; if (s && s.dx) snapBack(s.dx); }, { passive: true });
 $("showFree").checked = store.get("tt-free") !== "0";
 $("showRev").checked = store.get("tt-rev") !== "0";
 $("showFree").onchange = applyFilters;
@@ -745,7 +771,7 @@ async function load() {
 }
 load();
 let lastHour = Math.floor(Date.now() / H);
-setInterval(() => { renderNext(); const h = Math.floor(Date.now() / H); if (h !== lastHour) { lastHour = h; render(); } }, 60000);
+setInterval(() => { renderNext(); const h = Math.floor(Date.now() / H); if (h !== lastHour && !touch && !sliding) { lastHour = h; render(); } }, 60000);
 </script>
 </body>
 </html>
