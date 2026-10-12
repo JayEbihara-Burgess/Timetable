@@ -94,8 +94,33 @@ main{max-width:1200px;margin:0 auto;padding:0 20px 40px;overflow-x:hidden}
 .row .time{width:130px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
 .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;color:#111;margin-left:6px}
 .empty{padding:30px;text-align:center;color:var(--muted)}
-.legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12.5px;color:var(--muted);margin:14px 0 0}
-.legend label{cursor:pointer;display:flex;gap:5px;align-items:center}
+
+/* Interactive Legend & Filters */
+.legend{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);margin:14px 0 0}
+.filter-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 10px;
+  border-radius:20px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  font:inherit;
+  font-size:12.5px;
+  color:var(--ink);
+  cursor:pointer;
+  user-select:none;
+  transition:all .15s ease;
+  min-height:auto;
+}
+.filter-chip:hover{border-color:var(--accent)}
+.filter-chip.off{
+  opacity:.45;
+  background:transparent;
+  border-color:var(--line);
+  text-decoration:line-through;
+}
+
 .ev,.row[data-i]{cursor:pointer}
 .ev:hover,.ev:focus-visible{filter:brightness(.96);outline:2px solid var(--accent);outline-offset:-2px}
 .row[data-i]:hover,.row[data-i]:focus-visible{background:rgba(104,36,109,.06);outline:none}
@@ -108,7 +133,7 @@ main{max-width:1200px;margin:0 auto;padding:0 20px 40px;overflow-x:hidden}
 .sheet dt{color:var(--muted);font-size:13px}
 .sheet dd{margin:0;font-weight:500}
 #mClose{position:absolute;top:8px;right:8px;width:38px;height:38px;border-radius:50%;padding:0;font-size:22px;line-height:1}
-.sw{display:inline-block;width:14px;height:14px;border-radius:4px;border-left:4px solid rgba(0,0,0,.35);vertical-align:-3px;margin-right:4px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;border-left:4px solid rgba(0,0,0,.35);vertical-align:middle;margin-right:2px}
 #warn{background:#fdecea;color:#7a1d12;border:1px solid #f3b8b0;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px}
 #loader{background:var(--panel);border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;margin-bottom:16px}
 #zoneNote{max-width:1200px;margin:0 auto;padding:0 20px 10px}
@@ -141,7 +166,7 @@ html,body{overscroll-behavior-x:none}
   #next{padding:12px 14px}
   #next .now{font-size:21px}
   #next .when{font-size:14px}
-  .legend{gap:6px 12px;font-size:12px}
+  .legend{gap:6px;font-size:12px}
   .row{flex-direction:column;gap:2px}
   .row .time{width:auto}
   .list-day h3{padding:10px 12px}
@@ -184,17 +209,13 @@ html,body{overscroll-behavior-x:none}
   <div id="warn" hidden></div>
   <div class="sub" id="stats" style="margin-bottom:10px"></div>
   <div id="view"></div>
-  <div class="legend">
-    <span><i class="sw" style="background:hsl(210 70% 80%)"></i>Class</span>
-    <span><i class="sw" style="background:hsl(210 75% 94%);border:1px dashed rgba(0,0,0,.3);border-left:4px dashed hsl(210 55% 45%)"></i>Revision (dashed)</span>
-    <span><i class="sw" style="background:#ffe08a;border-left-color:#b07d00"></i>Sport</span>
-    <span><i class="sw" style="background:#ffd3b8;border-left-color:#c2612a"></i>Lunch</span>
-    <span><i class="sw" style="background:#f9c6dd;border-left-color:#c2306b"></i>Call</span>
-    <span><i class="sw" style="border:1px dashed var(--muted)"></i>Free period</span>
-    <label><input type="checkbox" id="showFree" checked> show free periods</label>
-    <label><input type="checkbox" id="showRev" checked> show revision</label>
-    <label><input type="checkbox" id="showLunch" checked> show lunch breaks</label>
-    <label><input type="checkbox" id="showCalls" checked> show phone calls</label>
+  <div class="legend" id="filterLegend" role="group" aria-label="Toggle event categories">
+    <button class="filter-chip" data-kind="class"><i class="sw" style="background:hsl(210 70% 80%)"></i>Class</button>
+    <button class="filter-chip" data-kind="revision"><i class="sw" style="background:hsl(210 75% 94%);border:1px dashed rgba(0,0,0,.3);border-left:4px dashed hsl(210 55% 45%)"></i>Revision</button>
+    <button class="filter-chip" data-kind="sport"><i class="sw" style="background:#ffe08a;border-left-color:#b07d00"></i>Sport</button>
+    <button class="filter-chip" data-kind="lunch"><i class="sw" style="background:#ffd3b8;border-left-color:#c2612a"></i>Lunch</button>
+    <button class="filter-chip" data-kind="call"><i class="sw" style="background:#f9c6dd;border-left-color:#c2306b"></i>Call</button>
+    <button class="filter-chip" data-kind="free"><i class="sw" style="border:1px dashed var(--muted)"></i>Free period</button>
   </div>
 </main>
 
@@ -432,6 +453,16 @@ const savedView = store.get("tt-view");
 let all = [], events = [], view = ["day", "week", "list"].includes(savedView) ? savedView : (isPhone() ? "day" : "week"), zonePref = store.get("tz-pref") || "auto", detected = detect();
 let weekStart = mondayOf(utcToUkWall(Date.now())), dayStart = todayUk();
 
+// Category filter states
+const filterState = {
+  class: store.get("tt-class") !== "0",
+  revision: store.get("tt-revision") !== "0",
+  sport: store.get("tt-sport") !== "0",
+  lunch: store.get("tt-lunch") !== "0",
+  call: store.get("tt-call") !== "0",
+  free: store.get("tt-free") !== "0"
+};
+
 function detect() {
   let tz = "";
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
@@ -480,23 +511,19 @@ function setPlan(text) {
   document.getElementById("loader").hidden = true;
   applyFilters();
 }
+
+function updateFilterChipsUI() {
+  document.querySelectorAll(".filter-chip").forEach(chip => {
+    const k = chip.dataset.kind;
+    const active = filterState[k];
+    chip.classList.toggle("off", !active);
+    chip.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
 function applyFilters() {
-  const free = document.getElementById("showFree").checked;
-  const rev = document.getElementById("showRev").checked;
-  const lunch = document.getElementById("showLunch").checked;
-  const call = document.getElementById("showCalls").checked;
-
-  store.set("tt-free", free ? "1" : "0");
-  store.set("tt-rev", rev ? "1" : "0");
-  store.set("tt-lunch", lunch ? "1" : "0");
-  store.set("tt-call", call ? "1" : "0");
-
-  events = all.filter(e =>
-    (free || e.kind !== "free") &&
-    (rev || e.kind !== "revision") &&
-    (lunch || e.kind !== "lunch") &&
-    (call || e.kind !== "call")
-  );
+  updateFilterChipsUI();
+  events = all.filter(e => filterState[e.kind]);
   render();
 }
 
@@ -761,16 +788,14 @@ $("today").onclick = () => { dayStart = todayUk(); weekStart = mondayOf(dayStart
 $("vday").onclick = () => setView("day");
 $("vweek").onclick = () => setView("week");
 $("vlist").onclick = () => setView("list");
-// swipe left/right to change day (day view) or week (list view)
-// the panels follow the finger and the neighbour is visible; it only changes if released past a threshold or flicked.
-// In week view the grid can scroll sideways, so a swipe only changes week from the very end of the scroll.
+
+// Swipe navigation
 let touch = null;
 const viewEl = $("view");
 const centerWrap = () => { const tr = trackEl(); return tr && tr.children[1].querySelector(".gridwrap"); };
 viewEl.addEventListener("touchstart", e => {
   if (sliding || e.touches.length !== 1) { touch = null; return; }
   const t = e.touches[0];
-  // baseL / baseR: the finger position at which the grid reached its left / right end (null = not at that end)
   touch = { x: t.clientX, y: t.clientY, dx: 0, lock: null, t0: Date.now(), baseL: 0, baseR: 0 };
   if (view === "week") {
     const gw = centerWrap();
@@ -789,7 +814,6 @@ viewEl.addEventListener("touchmove", e => {
   if (touch.lock !== "x") return;
   let pull = dx;
   if (view === "week") {
-    // the grid scrolls natively; only the drag beyond its very end pulls in the neighbouring week
     const gw = centerWrap();
     if (gw) {
       const max = gw.scrollWidth - gw.clientWidth;
@@ -807,21 +831,22 @@ function endSwipe() {
   const s = touch; touch = null;
   if (!s || s.lock !== "x" || !s.dx) return;
   const dx = s.dx, W = viewEl.offsetWidth || 1, dir = dx < 0 ? 1 : -1;
-  const speed = Math.abs(dx) / Math.max(1, Date.now() - s.t0);          // px per ms
+  const speed = Math.abs(dx) / Math.max(1, Date.now() - s.t0);
   const commit = Math.abs(dx) > W * 0.25 || (speed > 0.5 && Math.abs(dx) > 30);
   if (commit) commitSlide(dir, dx, 200); else snapBack(dx);
 }
 viewEl.addEventListener("touchend", endSwipe, { passive: true });
 viewEl.addEventListener("touchcancel", () => { const s = touch; touch = null; if (s && s.dx) snapBack(s.dx); }, { passive: true });
-$("showFree").checked = store.get("tt-free") !== "0";
-$("showRev").checked = store.get("tt-rev") !== "0";
-$("showLunch").checked = store.get("tt-lunch") !== "0";
-$("showCalls").checked = store.get("tt-call") !== "0";
 
-$("showFree").onchange = applyFilters;
-$("showRev").onchange = applyFilters;
-$("showLunch").onchange = applyFilters;
-$("showCalls").onchange = applyFilters;
+// Filter Chip Click Handling
+$("filterLegend").addEventListener("click", e => {
+  const chip = e.target.closest(".filter-chip");
+  if (!chip) return;
+  const k = chip.dataset.kind;
+  filterState[k] = !filterState[k];
+  store.set("tt-" + k, filterState[k] ? "1" : "0");
+  applyFilters();
+});
 
 document.querySelectorAll("#zoneSeg button").forEach(b => b.onclick = () => { zonePref = b.dataset.z; store.set("tz-pref", zonePref); render(); });
 $("loadbtn").onclick = $("pick").onclick = () => $("file").click();
